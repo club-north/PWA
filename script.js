@@ -1,6 +1,6 @@
 // ==========================================
-// micro:bit FPVカー PWA メインコントロール
-// UART改行対応 + micro:bit互換修正版
+// micro:bit FPVカー PWA 完全修正版
+// LOFI Control互換版
 // ==========================================
 
 let device = null;
@@ -11,7 +11,7 @@ let currentDirection = "STOP";
 let currentSpeed = 2;
 
 // ==========================================
-// トリム値
+// トリム
 // ==========================================
 let leftTrim = 8;
 let rightTrim = 0;
@@ -20,7 +20,10 @@ let rightTrim = 0;
 // ジョイスティック
 // ==========================================
 let joystickActive = false;
-let joystickCenter = { x: 0, y: 0 };
+let joystickCenter = {
+    x: 0,
+    y: 0
+};
 
 // ==========================================
 // カメラ
@@ -28,7 +31,7 @@ let joystickCenter = { x: 0, y: 0 };
 let videoStream = null;
 
 // ==========================================
-// BLE UUID
+// micro:bit UART UUID
 // ==========================================
 const SERVICE_UUID =
     "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
@@ -75,15 +78,21 @@ async function connectBluetooth() {
             onDisconnected
         );
 
-        showToast("Bluetooth接続成功");
+        showToast(
+            "Bluetooth接続成功"
+        );
 
-        console.log("BLE connected");
+        console.log(
+            "BLE connected"
+        );
 
-    } catch (error) {
+    } catch(error) {
 
         console.error(error);
 
-        showToast("接続失敗");
+        showToast(
+            "接続失敗"
+        );
     }
 }
 
@@ -96,7 +105,9 @@ function onDisconnected() {
 
     updateConnectionStatus(false);
 
-    showToast("切断されました");
+    showToast(
+        "切断されました"
+    );
 }
 
 function disconnectBluetooth() {
@@ -105,6 +116,7 @@ function disconnectBluetooth() {
         device &&
         device.gatt.connected
     ) {
+
         device.gatt.disconnect();
     }
 
@@ -115,7 +127,7 @@ function disconnectBluetooth() {
 
 // ==========================================
 // UART送信
-// ★ 改行付き（超重要）
+// 改行付き（超重要）
 // ==========================================
 async function sendCommand(command) {
 
@@ -129,16 +141,18 @@ async function sendCommand(command) {
             new TextEncoder();
 
         // ==================================
-        // micro:bit UART用
         // 改行付き送信
         // ==================================
         await characteristic.writeValue(
             encoder.encode(command + "\n")
         );
 
-        console.log("送信:", command);
+        console.log(
+            "送信:",
+            command
+        );
 
-    } catch (error) {
+    } catch(error) {
 
         console.error(
             "送信エラー:",
@@ -149,14 +163,26 @@ async function sendCommand(command) {
 
 // ==========================================
 // スピード変更
-// micro:bit互換 c10〜c14
+// SPD:xx形式
 // ==========================================
 async function setSpeed(level) {
 
     currentSpeed = level;
 
-    // c10〜c14
-    const command = `c1${level}`;
+    // 0〜4 → 実速度
+    const speedMap = [
+        15,
+        25,
+        35,
+        45,
+        60
+    ];
+
+    const realSpeed =
+        speedMap[level];
+
+    const command =
+        `SPD:${realSpeed}`;
 
     await sendCommand(command);
 
@@ -173,6 +199,7 @@ async function setSpeed(level) {
 
 // ==========================================
 // 方向制御
+// micro:bit互換
 // ==========================================
 async function setDirection(
     direction,
@@ -181,45 +208,50 @@ async function setDirection(
 
     if (!connected) return;
 
-    // ======================================
-    // STOP
-    // ======================================
-    if (direction === "STOP") {
-
-        // micro:bit側停止命令
-        await sendCommand("up");
-
-        currentDirection = "STOP";
-
-        return;
-    }
+    let command = "S";
 
     // ======================================
-    // 押した
+    // 押した時
     // ======================================
     if (isPress) {
 
-        await sendCommand(
-            direction.toUpperCase()
-        );
+        switch(direction) {
 
-        currentDirection = direction;
+            case "UP":
+                command = "F";
+                break;
+
+            case "DOWN":
+                command = "B";
+                break;
+
+            case "LEFT":
+                command = "L";
+                break;
+
+            case "RIGHT":
+                command = "R";
+                break;
+
+            default:
+                command = "S";
+        }
 
     } else {
 
         // ==================================
-        // 離した
+        // 離した時
         // ==================================
-        await sendCommand(
-            direction.toLowerCase()
-        );
-
-        currentDirection = "STOP";
+        command = "S";
     }
+
+    await sendCommand(command);
+
+    currentDirection = direction;
 }
 
 // ==========================================
-// トリム表示更新
+// トリム更新
 // ==========================================
 function updateTrim() {
 
@@ -233,7 +265,7 @@ function updateTrim() {
 }
 
 // ==========================================
-// 接続状態表示
+// 接続表示
 // ==========================================
 function updateConnectionStatus(
     isConnected
@@ -288,7 +320,7 @@ function updateConnectionStatus(
 }
 
 // ==========================================
-// カメラ開始
+// カメラ
 // ==========================================
 async function startCamera() {
 
@@ -300,7 +332,8 @@ async function startCamera() {
 
                     video: {
                         facingMode: {
-                            ideal: "environment"
+                            ideal:
+                            "environment"
                         }
                     }
 
@@ -311,19 +344,24 @@ async function startCamera() {
                 "video"
             );
 
-        video.srcObject = videoStream;
+        video.srcObject =
+            videoStream;
 
         document.getElementById(
             "videoOverlay"
         ).style.display = "none";
 
-        showToast("カメラ起動");
+        showToast(
+            "カメラ起動"
+        );
 
-    } catch (error) {
+    } catch(error) {
 
         console.error(error);
 
-        showToast("カメラエラー");
+        showToast(
+            "カメラエラー"
+        );
     }
 }
 
@@ -342,7 +380,7 @@ function initJoystick() {
             "joystickThumb"
         );
 
-    function start(clientX, clientY) {
+    function start(x, y) {
 
         joystickActive = true;
 
@@ -360,25 +398,23 @@ function initJoystick() {
                 rect.height / 2
         };
 
-        move(clientX, clientY);
+        move(x, y);
     }
 
-    function move(clientX, clientY) {
+    function move(x, y) {
 
         if (!joystickActive) return;
 
         let dx =
-            clientX -
-            joystickCenter.x;
+            x - joystickCenter.x;
 
         let dy =
-            clientY -
-            joystickCenter.y;
+            y - joystickCenter.y;
 
         const max = 60;
 
         const dist =
-            Math.sqrt(dx * dx + dy * dy);
+            Math.sqrt(dx*dx + dy*dy);
 
         if (dist > max) {
 
@@ -406,15 +442,15 @@ function initJoystick() {
 
                 dir =
                     dy < 0
-                        ? "UP"
-                        : "DOWN";
+                    ? "UP"
+                    : "DOWN";
 
             } else {
 
                 dir =
                     dx < 0
-                        ? "LEFT"
-                        : "RIGHT";
+                    ? "LEFT"
+                    : "RIGHT";
             }
         }
 
@@ -431,7 +467,10 @@ function initJoystick() {
         thumb.style.transform =
             "translate(0px,0px)";
 
-        setDirection("STOP");
+        setDirection(
+            "STOP",
+            false
+        );
     }
 
     // touch
@@ -441,7 +480,8 @@ function initJoystick() {
 
             e.preventDefault();
 
-            const t = e.touches[0];
+            const t =
+                e.touches[0];
 
             start(
                 t.clientX,
@@ -454,11 +494,13 @@ function initJoystick() {
         "touchmove",
         (e) => {
 
-            if (!joystickActive) return;
+            if (!joystickActive)
+                return;
 
             e.preventDefault();
 
-            const t = e.touches[0];
+            const t =
+                e.touches[0];
 
             move(
                 t.clientX,
@@ -490,7 +532,8 @@ function initJoystick() {
         "mousemove",
         (e) => {
 
-            if (!joystickActive) return;
+            if (!joystickActive)
+                return;
 
             move(
                 e.clientX,
@@ -520,20 +563,24 @@ function initDpad() {
         const dir =
             btn.dataset.dir;
 
-        // 押した
         function press(e) {
 
             e.preventDefault();
 
-            setDirection(dir, true);
+            setDirection(
+                dir,
+                true
+            );
         }
 
-        // 離した
         function release(e) {
 
             e.preventDefault();
 
-            setDirection(dir, false);
+            setDirection(
+                dir,
+                false
+            );
         }
 
         btn.addEventListener(
@@ -568,16 +615,23 @@ function showToast(message) {
 
     toast.textContent = message;
 
-    toast.style.position = "fixed";
-    toast.style.bottom = "100px";
-    toast.style.left = "50%";
+    toast.style.position =
+        "fixed";
+
+    toast.style.bottom =
+        "100px";
+
+    toast.style.left =
+        "50%";
+
     toast.style.transform =
         "translateX(-50%)";
 
     toast.style.background =
         "rgba(0,0,0,0.8)";
 
-    toast.style.color = "white";
+    toast.style.color =
+        "white";
 
     toast.style.padding =
         "10px 18px";
@@ -585,7 +639,8 @@ function showToast(message) {
     toast.style.borderRadius =
         "20px";
 
-    toast.style.zIndex = "9999";
+    toast.style.zIndex =
+        "9999";
 
     document.body.appendChild(
         toast
@@ -720,7 +775,8 @@ function init() {
         in navigator
     ) {
 
-        navigator.serviceWorker
+        navigator
+            .serviceWorker
             .register("./sw.js");
     }
 
