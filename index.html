@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>micro:bit FPVカーコントロール</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- ヘッダー -->
+        <header>
+            <h1>🎮 micro:bit FPVカー</h1>
+            <div class="connection-status">
+                <div class="status-led" id="statusLed"></div>
+                <span id="statusText">未接続</span>
+            </div>
+        </header>
+
+        <!-- カメラ映像 -->
+        <div class="video-container">
+            <video id="video" autoplay playsinline muted></video>
+            <canvas id="canvas" style="display: none;"></canvas>
+            <div class="video-overlay" id="videoOverlay">
+                <div class="camera-placeholder">
+                    📷 カメラ接続待ち
+                    <button id="startCamera" class="cam-btn">カメラ起動</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- コントロールパネル -->
+        <div class="controls">
+            <!-- ジョイスティックエリア -->
+            <div class="joystick-area">
+                <div class="joystick-container">
+                    <div class="joystick-base" id="joystickBase">
+                        <div class="joystick-thumb" id="joystickThumb"></div>
+                    </div>
+                </div>
+                
+                <!-- 十字キー（タッチ用） -->
+                <div class="dpad">
+                    <button class="dpad-btn" data-dir="UP">▲</button>
+                    <div class="dpad-row">
+                        <button class="dpad-btn" data-dir="LEFT">◀</button>
+                        <button class="dpad-btn center" data-dir="STOP">●</button>
+                        <button class="dpad-btn" data-dir="RIGHT">▶</button>
+                    </div>
+                    <button class="dpad-btn" data-dir="DOWN">▼</button>
+                </div>
+            </div>
+
+            <!-- スピードコントロール -->
+            <div class="speed-control">
+                <label>⚡ スピード: <span id="speedValue">2</span>/4</label>
+                <input type="range" id="speedSlider" min="0" max="4" step="1" value="2">
+                <div class="speed-indicator">
+                    <div class="speed-bar" id="speedBar"></div>
+                </div>
+            </div>
+
+            <!-- トリム調整（ズレ補正） -->
+            <div class="trim-panel">
+                <h3>🔧 走行調整</h3>
+                <div class="trim-controls">
+                    <div class="trim-item">
+                        <label>左トリム: <span id="leftTrimVal">8</span></label>
+                        <input type="range" id="leftTrim" min="0" max="30" value="8">
+                    </div>
+                    <div class="trim-item">
+                        <label>右トリム: <span id="rightTrimVal">0</span></label>
+                        <input type="range" id="rightTrim" min="0" max="30" value="0">
+                    </div>
+                </div>
+                <button id="resetTrim" class="small-btn">リセット</button>
+            </div>
+        </div>
+
+        <!-- ボトムバー -->
+        <div class="bottom-bar">
+            <button id="connectBtn" class="action-btn connect">🔗 Bluetooth接続</button>
+            <button id="disconnectBtn" class="action-btn disconnect" disabled>🔌 切断</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
