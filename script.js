@@ -1,5 +1,6 @@
 // ==========================================
-// micro:bit FPVカー PWA 完全安定版
+// micro:bit FPVカー PWA
+// 完全安定版 script.js
 // LOFI Control互換
 // ==========================================
 
@@ -13,6 +14,7 @@ let connected = false;
 let currentDirection = "STOP";
 let currentSpeed = 2;
 
+// ジョイスティック
 let joystickActive = false;
 
 let joystickCenter = {
@@ -20,10 +22,11 @@ let joystickCenter = {
     y: 0
 };
 
+// カメラ
 let videoStream = null;
 
 // ==========================================
-// UUID
+// micro:bit BLE UART UUID
 // ==========================================
 const SERVICE_UUID =
     "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
@@ -46,25 +49,35 @@ async function connectBluetooth() {
                 optionalServices: [
                     SERVICE_UUID
                 ]
+
             });
+
+        console.log("device取得");
 
         const server =
             await device.gatt.connect();
+
+        console.log("GATT接続");
 
         const service =
             await server.getPrimaryService(
                 SERVICE_UUID
             );
 
+        console.log("service取得");
+
         characteristic =
             await service.getCharacteristic(
                 CHARACTERISTIC_UUID
             );
 
+        console.log("characteristic取得");
+
         connected = true;
 
         updateConnectionStatus(true);
 
+        // 切断監視
         device.addEventListener(
             "gattserverdisconnected",
             onDisconnected
@@ -75,15 +88,21 @@ async function connectBluetooth() {
         );
 
         console.log(
-            "BLE connected"
+            "BLE接続成功"
         );
+
+        // 初期速度送信
+        setSpeed(currentSpeed);
 
     } catch(error) {
 
-        console.error(error);
+        console.error(
+            "BLE接続失敗:",
+            error
+        );
 
         showToast(
-            "接続失敗"
+            "Bluetooth接続失敗"
         );
     }
 }
@@ -99,6 +118,10 @@ function onDisconnected() {
 
     showToast(
         "切断されました"
+    );
+
+    console.log(
+        "BLE切断"
     );
 }
 
@@ -132,17 +155,21 @@ async function sendCommand(command) {
         const encoder =
             new TextEncoder();
 
-        // ==================================
-        // micro:bit UART形式
-        // ==================================
-        await characteristic.writeValue(
+        const data =
             encoder.encode(
                 command + "\n"
-            )
-        );
+            );
+
+        // ==================================
+        // micro:bit BLE UART 安定版
+        // ==================================
+        await characteristic
+            .writeValueWithoutResponse(
+                data
+            );
 
         console.log(
-            "送信:",
+            "送信成功:",
             command
         );
 
@@ -151,6 +178,10 @@ async function sendCommand(command) {
         console.error(
             "送信エラー:",
             error
+        );
+
+        showToast(
+            "送信エラー"
         );
     }
 }
@@ -174,9 +205,10 @@ async function setSpeed(level) {
     const realSpeed =
         speedMap[level];
 
-    await sendCommand(
-        `SPD:${realSpeed}`
-    );
+    const command =
+        `SPD:${realSpeed}`;
+
+    await sendCommand(command);
 
     // UI更新
     document.getElementById(
@@ -187,20 +219,21 @@ async function setSpeed(level) {
         "speedBar"
     ).style.width =
         `${(level / 4) * 100}%`;
+
+    console.log(
+        "速度:",
+        realSpeed
+    );
 }
 
 // ==========================================
 // 方向制御
 // ==========================================
-async function setDirection(
-    direction
-) {
+async function setDirection(direction) {
 
     if (!connected) return;
 
-    // ======================================
     // 同じ方向なら送信しない
-    // ======================================
     if (
         direction === currentDirection
     ) {
@@ -234,6 +267,11 @@ async function setDirection(
     }
 
     await sendCommand(command);
+
+    console.log(
+        "方向:",
+        command
+    );
 }
 
 // ==========================================
@@ -330,10 +368,13 @@ async function startCamera() {
 
     } catch(error) {
 
-        console.error(error);
+        console.error(
+            "カメラエラー:",
+            error
+        );
 
         showToast(
-            "カメラエラー"
+            "カメラ使用不可"
         );
     }
 }
@@ -353,9 +394,7 @@ function initJoystick() {
             "joystickThumb"
         );
 
-    // ======================================
     // 開始
-    // ======================================
     function start(x, y) {
 
         joystickActive = true;
@@ -377,9 +416,7 @@ function initJoystick() {
         move(x, y);
     }
 
-    // ======================================
     // 移動
-    // ======================================
     function move(x, y) {
 
         if (!joystickActive)
@@ -443,9 +480,7 @@ function initJoystick() {
         setDirection(dir);
     }
 
-    // ======================================
     // 終了
-    // ======================================
     function end() {
 
         joystickActive = false;
@@ -456,9 +491,7 @@ function initJoystick() {
         setDirection("STOP");
     }
 
-    // ======================================
     // touch
-    // ======================================
     thumb.addEventListener(
         "touchstart",
         (e) => {
@@ -499,9 +532,7 @@ function initJoystick() {
         end
     );
 
-    // ======================================
     // mouse
-    // ======================================
     thumb.addEventListener(
         "mousedown",
         (e) => {
@@ -563,9 +594,7 @@ function initDpad() {
 
             e.preventDefault();
 
-            setDirection(
-                "STOP"
-            );
+            setDirection("STOP");
         }
 
         btn.addEventListener(
