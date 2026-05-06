@@ -1,8 +1,11 @@
 // ==========================================
-// micro:bit FPVカー PWA 完全修正版
-// LOFI Control互換版
+// micro:bit FPVカー PWA 完全安定版
+// LOFI Control互換
 // ==========================================
 
+// ==========================================
+// グローバル
+// ==========================================
 let device = null;
 let characteristic = null;
 let connected = false;
@@ -10,28 +13,17 @@ let connected = false;
 let currentDirection = "STOP";
 let currentSpeed = 2;
 
-// ==========================================
-// トリム
-// ==========================================
-let leftTrim = 8;
-let rightTrim = 0;
-
-// ==========================================
-// ジョイスティック
-// ==========================================
 let joystickActive = false;
+
 let joystickCenter = {
     x: 0,
     y: 0
 };
 
-// ==========================================
-// カメラ
-// ==========================================
 let videoStream = null;
 
 // ==========================================
-// micro:bit UART UUID
+// UUID
 // ==========================================
 const SERVICE_UUID =
     "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
@@ -141,10 +133,12 @@ async function sendCommand(command) {
             new TextEncoder();
 
         // ==================================
-        // 改行付き送信
+        // micro:bit UART形式
         // ==================================
         await characteristic.writeValue(
-            encoder.encode(command + "\n")
+            encoder.encode(
+                command + "\n"
+            )
         );
 
         console.log(
@@ -162,14 +156,13 @@ async function sendCommand(command) {
 }
 
 // ==========================================
-// スピード変更
-// SPD:xx形式
+// 速度変更
+// SPD:xx
 // ==========================================
 async function setSpeed(level) {
 
     currentSpeed = level;
 
-    // 0〜4 → 実速度
     const speedMap = [
         15,
         25,
@@ -181,10 +174,9 @@ async function setSpeed(level) {
     const realSpeed =
         speedMap[level];
 
-    const command =
-        `SPD:${realSpeed}`;
-
-    await sendCommand(command);
+    await sendCommand(
+        `SPD:${realSpeed}`
+    );
 
     // UI更新
     document.getElementById(
@@ -199,69 +191,49 @@ async function setSpeed(level) {
 
 // ==========================================
 // 方向制御
-// micro:bit互換
 // ==========================================
 async function setDirection(
-    direction,
-    isPress = true
+    direction
 ) {
 
     if (!connected) return;
 
+    // ======================================
+    // 同じ方向なら送信しない
+    // ======================================
+    if (
+        direction === currentDirection
+    ) {
+        return;
+    }
+
+    currentDirection = direction;
+
     let command = "S";
 
-    // ======================================
-    // 押した時
-    // ======================================
-    if (isPress) {
+    switch(direction) {
 
-        switch(direction) {
+        case "UP":
+            command = "F";
+            break;
 
-            case "UP":
-                command = "F";
-                break;
+        case "DOWN":
+            command = "B";
+            break;
 
-            case "DOWN":
-                command = "B";
-                break;
+        case "LEFT":
+            command = "L";
+            break;
 
-            case "LEFT":
-                command = "L";
-                break;
+        case "RIGHT":
+            command = "R";
+            break;
 
-            case "RIGHT":
-                command = "R";
-                break;
-
-            default:
-                command = "S";
-        }
-
-    } else {
-
-        // ==================================
-        // 離した時
-        // ==================================
-        command = "S";
+        default:
+            command = "S";
     }
 
     await sendCommand(command);
-
-    currentDirection = direction;
-}
-
-// ==========================================
-// トリム更新
-// ==========================================
-function updateTrim() {
-
-    document.getElementById(
-        "leftTrimVal"
-    ).textContent = leftTrim;
-
-    document.getElementById(
-        "rightTrimVal"
-    ).textContent = rightTrim;
 }
 
 // ==========================================
@@ -349,7 +321,8 @@ async function startCamera() {
 
         document.getElementById(
             "videoOverlay"
-        ).style.display = "none";
+        ).style.display =
+            "none";
 
         showToast(
             "カメラ起動"
@@ -380,6 +353,9 @@ function initJoystick() {
             "joystickThumb"
         );
 
+    // ======================================
+    // 開始
+    // ======================================
     function start(x, y) {
 
         joystickActive = true;
@@ -401,9 +377,13 @@ function initJoystick() {
         move(x, y);
     }
 
+    // ======================================
+    // 移動
+    // ======================================
     function move(x, y) {
 
-        if (!joystickActive) return;
+        if (!joystickActive)
+            return;
 
         let dx =
             x - joystickCenter.x;
@@ -414,18 +394,24 @@ function initJoystick() {
         const max = 60;
 
         const dist =
-            Math.sqrt(dx*dx + dy*dy);
+            Math.sqrt(
+                dx*dx + dy*dy
+            );
 
+        // 半径制限
         if (dist > max) {
 
-            dx = dx / dist * max;
+            dx =
+                dx / dist * max;
 
-            dy = dy / dist * max;
+            dy =
+                dy / dist * max;
         }
 
         thumb.style.transform =
             `translate(${dx}px, ${dy}px)`;
 
+        // デッドゾーン
         const dead = 20;
 
         let dir = "STOP";
@@ -454,12 +440,12 @@ function initJoystick() {
             }
         }
 
-        if (dir !== currentDirection) {
-
-            setDirection(dir, true);
-        }
+        setDirection(dir);
     }
 
+    // ======================================
+    // 終了
+    // ======================================
     function end() {
 
         joystickActive = false;
@@ -467,13 +453,12 @@ function initJoystick() {
         thumb.style.transform =
             "translate(0px,0px)";
 
-        setDirection(
-            "STOP",
-            false
-        );
+        setDirection("STOP");
     }
 
+    // ======================================
     // touch
+    // ======================================
     thumb.addEventListener(
         "touchstart",
         (e) => {
@@ -514,7 +499,9 @@ function initJoystick() {
         end
     );
 
+    // ======================================
     // mouse
+    // ======================================
     thumb.addEventListener(
         "mousedown",
         (e) => {
@@ -563,23 +550,21 @@ function initDpad() {
         const dir =
             btn.dataset.dir;
 
+        // 押した
         function press(e) {
 
             e.preventDefault();
 
-            setDirection(
-                dir,
-                true
-            );
+            setDirection(dir);
         }
 
+        // 離した
         function release(e) {
 
             e.preventDefault();
 
             setDirection(
-                dir,
-                false
+                "STOP"
             );
         }
 
@@ -611,7 +596,9 @@ function initDpad() {
 function showToast(message) {
 
     const toast =
-        document.createElement("div");
+        document.createElement(
+            "div"
+        );
 
     toast.textContent = message;
 
@@ -694,65 +681,6 @@ function init() {
             }
         );
 
-    // trim
-    const leftSlider =
-        document.getElementById(
-            "leftTrim"
-        );
-
-    const rightSlider =
-        document.getElementById(
-            "rightTrim"
-        );
-
-    leftSlider.addEventListener(
-        "input",
-        (e) => {
-
-            leftTrim =
-                parseInt(
-                    e.target.value
-                );
-
-            updateTrim();
-        }
-    );
-
-    rightSlider.addEventListener(
-        "input",
-        (e) => {
-
-            rightTrim =
-                parseInt(
-                    e.target.value
-                );
-
-            updateTrim();
-        }
-    );
-
-    document
-        .getElementById(
-            "resetTrim"
-        )
-        .addEventListener(
-            "click",
-            () => {
-
-                leftTrim = 8;
-                rightTrim = 0;
-
-                leftSlider.value = 8;
-                rightSlider.value = 0;
-
-                updateTrim();
-
-                showToast(
-                    "トリムリセット"
-                );
-            }
-        );
-
     // camera
     document
         .getElementById(
@@ -768,17 +696,6 @@ function init() {
 
     // dpad
     initDpad();
-
-    // service worker
-    if (
-        "serviceWorker"
-        in navigator
-    ) {
-
-        navigator
-            .serviceWorker
-            .register("./sw.js");
-    }
 
     console.log(
         "初期化完了"
