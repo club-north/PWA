@@ -1,13 +1,16 @@
 
+// =====================================
+// micro:bit FPV Car PWA（完全安定版）
+// BLE + UART 安定統合版
+// =====================================
+
+
 // ===============================
-// BLE UUID
+// BLE UUID（micro:bit標準UART）
 // ===============================
 
 const UART_SERVICE =
 "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-
-const UART_TX =
-"6e400002-b5a3-f393-e0a9-e50e24dcca9e";
 
 let device;
 let server;
@@ -27,7 +30,7 @@ const disconnectBtn = document.getElementById("disconnectBtn");
 
 
 // ===============================
-// 状態管理
+// 送信制御（完全安定）
 // ===============================
 
 let queue = [];
@@ -35,7 +38,7 @@ let sending = false;
 
 
 // ===============================
-// CONNECT
+// CONNECT（完全安定探索）
 // ===============================
 
 async function connectBLE(){
@@ -44,23 +47,37 @@ async function connectBLE(){
 
         device = await navigator.bluetooth.requestDevice({
 
-            filters:[{
-                namePrefix:"BBC micro:bit"
-            }],
+            acceptAllDevices: true,
 
-            optionalServices:[UART_SERVICE]
+            optionalServices:[
+                UART_SERVICE
+            ]
         });
 
-        device.addEventListener("gattserverdisconnected", ()=>{
-            connected = false;
-            updateUI(false);
-        });
+        device.addEventListener(
+            "gattserverdisconnected",
+            ()=>{
+                connected = false;
+                updateUI(false);
+            }
+        );
 
         server = await device.gatt.connect();
 
         service = await server.getPrimaryService(UART_SERVICE);
 
-        tx = await service.getCharacteristic(UART_TX);
+        const chars = await service.getCharacteristics();
+
+        // ★書き込み可能を自動検出
+        tx = chars.find(c =>
+            c.properties.write ||
+            c.properties.writeWithoutResponse
+        );
+
+        if(!tx){
+            alert("書き込み可能characteristicが見つかりません");
+            return;
+        }
 
         connected = true;
 
@@ -88,7 +105,7 @@ function disconnectBLE(){
 
 
 // ===============================
-// UI
+// UI更新
 // ===============================
 
 function updateUI(state){
@@ -108,7 +125,7 @@ function updateUI(state){
 
 
 // ===============================
-// 🔥送信（安定版）
+// 🔥送信（完全安定版）
 // ===============================
 
 function send(cmd){
@@ -122,7 +139,7 @@ function send(cmd){
 
 
 // ===============================
-// 直列送信（完全安定）
+// 直列送信（GATT完全回避）
 // ===============================
 
 async function processQueue(){
@@ -198,7 +215,7 @@ function bindPad(dir, press, release){
 
 
 // ===============================
-// コマンド完全一致
+// コマンド一致（micro:bit仕様）
 // ===============================
 
 bindPad("UP", "UP", "up");
@@ -208,7 +225,7 @@ bindPad("RIGHT", "RIGHT", "right");
 
 
 // ===============================
-// STOP
+// STOPボタン
 // ===============================
 
 document
@@ -223,7 +240,7 @@ document
 
 
 // ===============================
-// SPEED（安定版）
+// SPEED（安定版スライダー）
 // ===============================
 
 let lastSpeed = "";
