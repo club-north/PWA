@@ -3,89 +3,441 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#1a1a2e">
-    <title>micro:bit FPVカーコントロール</title>
-    <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="style.css">
+    <title>micro:bit Car Controller</title>
+    <style>
+        * {
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            box-sizing: border-box;
+        }
+        body {
+            background: linear-gradient(145deg, #1a1a2e 0%, #16213e 100%);
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 16px;
+        }
+        .container {
+            max-width: 500px;
+            width: 100%;
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 56px;
+            padding: 24px 20px 32px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #0f0f1a;
+            padding: 12px 20px;
+            border-radius: 60px;
+            margin-bottom: 28px;
+        }
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .led {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #ff3333;
+            transition: all 0.2s;
+        }
+        .led.connected {
+            background: #33ff33;
+            box-shadow: 0 0 10px #33ff33;
+        }
+        .status-text {
+            color: white;
+            font-weight: 600;
+        }
+        button {
+            background: #2c2c44;
+            border: none;
+            color: white;
+            font-weight: bold;
+            padding: 8px 20px;
+            border-radius: 40px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        button:active { transform: scale(0.96); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .connect-btn { background: #00a86b; }
+        .disconnect-btn { background: #c41e3a; }
+        .speed-panel {
+            background: #0a0a12cc;
+            border-radius: 48px;
+            padding: 12px 20px;
+            margin-bottom: 28px;
+        }
+        .speed-label {
+            display: flex;
+            justify-content: space-between;
+            color: #ccc;
+            margin-bottom: 10px;
+        }
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            -webkit-appearance: none;
+            background: #2c2c44;
+            border-radius: 10px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            background: #00a86b;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid white;
+        }
+        .dpad {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 14px;
+            max-width: 280px;
+            margin: 20px auto;
+        }
+        .pad-btn {
+            background: #1e1e32;
+            border-radius: 60px;
+            text-align: center;
+            padding: 20px 0;
+            font-size: 32px;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            transition: 0.05s linear;
+            box-shadow: 0 8px 0 #0a0a12;
+            border: 1px solid rgba(255,255,255,0.2);
+            touch-action: manipulation;
+        }
+        .pad-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 #0a0a12;
+        }
+        .info {
+            text-align: center;
+            color: #aaa;
+            font-size: 12px;
+            margin-top: 24px;
+        }
+        .warning {
+            background: #ff990033;
+            border-left: 3px solid #ff9900;
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            font-size: 12px;
+            color: #ffaa66;
+        }
+        .debug {
+            font-size: 10px;
+            color: #888;
+            text-align: center;
+            margin-top: 12px;
+            font-family: monospace;
+            word-break: break-all;
+        }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <!-- ヘッダー -->
-        <header>
-            <h1>🎮 micro:bit FPVカー</h1>
-            <div class="connection-status">
-                <div class="status-led" id="statusLed"></div>
-                <span id="statusText">未接続</span>
-            </div>
-        </header>
-
-        <!-- カメラ映像 -->
-        <div class="video-container">
-            <video id="video" autoplay playsinline muted></video>
-            <canvas id="canvas" style="display: none;"></canvas>
-            <div class="video-overlay" id="videoOverlay">
-                <div class="camera-placeholder">
-                    📷 カメラ接続待ち
-                    <button id="startCamera" class="cam-btn">カメラ起動</button>
-                </div>
-            </div>
+<div class="container">
+    <div class="warning" id="warningMsg">
+        ⚠️ ローカルサーバーで実行してください（file://では動作しません）
+    </div>
+    <div class="status-bar">
+        <div class="status-indicator">
+            <div class="led" id="statusLed"></div>
+            <span class="status-text" id="statusText">未接続</span>
         </div>
-
-        <!-- コントロールパネル -->
-        <div class="controls">
-            <!-- ジョイスティックエリア -->
-            <div class="joystick-area">
-                <div class="joystick-container">
-                    <div class="joystick-base" id="joystickBase">
-                        <div class="joystick-thumb" id="joystickThumb"></div>
-                    </div>
-                </div>
-                
-                <!-- 十字キー（タッチ用） -->
-                <div class="dpad">
-                    <button class="dpad-btn" data-dir="UP">▲</button>
-                    <div class="dpad-row">
-                        <button class="dpad-btn" data-dir="LEFT">◀</button>
-                        <button class="dpad-btn center" data-dir="STOP">●</button>
-                        <button class="dpad-btn" data-dir="RIGHT">▶</button>
-                    </div>
-                    <button class="dpad-btn" data-dir="DOWN">▼</button>
-                </div>
-            </div>
-
-            <!-- スピードコントロール -->
-            <div class="speed-control">
-                <label>⚡ スピード: <span id="speedValue">2</span>/4</label>
-                <input type="range" id="speedSlider" min="0" max="4" step="1" value="2">
-                <div class="speed-indicator">
-                    <div class="speed-bar" id="speedBar"></div>
-                </div>
-            </div>
-
-            <!-- トリム調整（ズレ補正） -->
-            <div class="trim-panel">
-                <h3>🔧 走行調整</h3>
-                <div class="trim-controls">
-                    <div class="trim-item">
-                        <label>左トリム: <span id="leftTrimVal">8</span></label>
-                        <input type="range" id="leftTrim" min="0" max="30" value="8">
-                    </div>
-                    <div class="trim-item">
-                        <label>右トリム: <span id="rightTrimVal">0</span></label>
-                        <input type="range" id="rightTrim" min="0" max="30" value="0">
-                    </div>
-                </div>
-                <button id="resetTrim" class="small-btn">リセット</button>
-            </div>
-        </div>
-
-        <!-- ボトムバー -->
-        <div class="bottom-bar">
-            <button id="connectBtn" class="action-btn connect">🔗 Bluetooth接続</button>
-            <button id="disconnectBtn" class="action-btn disconnect" disabled>🔌 切断</button>
+        <div>
+            <button id="connectBtn" class="connect-btn">🔌 接続</button>
+            <button id="disconnectBtn" class="disconnect-btn" disabled>切断</button>
         </div>
     </div>
+    <div class="speed-panel">
+        <div class="speed-label">
+            <span>🐢 スピード</span>
+            <span id="speedValue">2</span>
+            <span>🐇</span>
+        </div>
+        <input type="range" id="speedSlider" min="0" max="4" step="1" value="2">
+    </div>
+    <div class="dpad">
+        <div></div>
+        <div class="pad-btn" data-dir="UP">▲</div>
+        <div></div>
+        <div class="pad-btn" data-dir="LEFT">◀</div>
+        <div class="pad-btn" data-dir="STOP" style="background:#c41e3a;">■</div>
+        <div class="pad-btn" data-dir="RIGHT">▶</div>
+        <div></div>
+        <div class="pad-btn" data-dir="DOWN">▼</div>
+        <div></div>
+    </div>
+    <div class="info">
+        ⚡ ボタンを押し続けると連続送信 | ■ ボタンで全停止
+    </div>
+    <div class="debug" id="debugInfo">⚡ 準備完了</div>
+</div>
 
-    <script src="script.js"></script>
+<script>
+    (function() {
+        'use strict';
+        
+        // プロトコルチェック
+        if (window.location.protocol === 'file:') {
+            const warningMsg = document.getElementById('warningMsg');
+            if (warningMsg) {
+                warningMsg.style.background = '#ff3333cc';
+                warningMsg.style.borderLeftColor = '#ff0000';
+                warningMsg.innerHTML = '❌ file://プロトコルでは動作しません！Pythonサーバーなどを使用してください：<br>python -m http.server 8080';
+            }
+            console.error('file://プロトコルではBLEは動作しません');
+        }
+        
+        const UART_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+        const TX_CHARACTERISTIC = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+        
+        let device = null;
+        let server = null;
+        let writeCharacteristic = null;
+        let connected = false;
+        
+        const statusLed = document.getElementById("statusLed");
+        const statusText = document.getElementById("statusText");
+        const connectBtn = document.getElementById("connectBtn");
+        const disconnectBtn = document.getElementById("disconnectBtn");
+        const debugInfo = document.getElementById("debugInfo");
+        
+        let queue = [];
+        let sending = false;
+        
+        function debugLog(msg) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logMsg = `[${timestamp}] ${msg}`;
+            console.log(logMsg);
+            if (debugInfo) {
+                debugInfo.innerHTML = logMsg;
+            }
+        }
+        
+        function updateUI(state) {
+            if (state) {
+                statusLed.classList.add("connected");
+                statusText.textContent = "接続中";
+                if (connectBtn) connectBtn.disabled = true;
+                if (disconnectBtn) disconnectBtn.disabled = false;
+            } else {
+                statusLed.classList.remove("connected");
+                statusText.textContent = "未接続";
+                if (connectBtn) connectBtn.disabled = false;
+                if (disconnectBtn) disconnectBtn.disabled = true;
+            }
+        }
+        
+        async function writeToMicrobit(data) {
+            if (!writeCharacteristic || !connected) return false;
+            try {
+                await writeCharacteristic.writeValue(data);
+                return true;
+            } catch (e) {
+                debugLog(`❌ 送信エラー: ${e.message}`);
+                return false;
+            }
+        }
+        
+        async function processQueue() {
+            if (sending) return;
+            if (queue.length === 0) return;
+            if (!connected || !writeCharacteristic) {
+                queue = [];
+                return;
+            }
+            sending = true;
+            const cmd = queue.shift();
+            try {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(cmd);
+                await writeToMicrobit(data);
+                debugLog(`📤 送信: ${cmd.trim()}`);
+            } catch (e) {
+                debugLog(`❌ 失敗: ${e.message}`);
+            }
+            sending = false;
+            setTimeout(processQueue, 50);
+        }
+        
+        function sendCommand(cmd) {
+            if (!connected || !writeCharacteristic) return;
+            queue.push(cmd + "\n");
+            processQueue();
+        }
+        
+        async function connectBLE() {
+            if (connected) return;
+            
+            if (window.location.protocol === 'file:') {
+                alert('file://プロトコルでは動作しません！\n\nPythonサーバーを起動してください：\npython -m http.server 8080\n\nその後 http://localhost:8080 にアクセス');
+                return;
+            }
+            
+            if (!navigator.bluetooth) {
+                alert("このブラウザはWeb Bluetoothに対応していません。Chromeを使用してください。");
+                return;
+            }
+            
+            try {
+                debugLog("🔍 デバイス検索中...");
+                device = await navigator.bluetooth.requestDevice({
+                    filters: [
+                        { namePrefix: "micro:bit" },
+                        { namePrefix: "BBC" }
+                    ],
+                    optionalServices: [UART_SERVICE]
+                });
+                
+                debugLog(`✅ 選択: ${device.name || "Unknown"}`);
+                
+                device.addEventListener("gattserverdisconnected", () => {
+                    debugLog("🔌 切断");
+                    connected = false;
+                    writeCharacteristic = null;
+                    updateUI(false);
+                    queue = [];
+                    sending = false;
+                });
+                
+                debugLog("🔗 GATT接続中...");
+                server = await device.gatt.connect();
+                debugLog("✅ GATT接続完了");
+                
+                debugLog("📡 サービス取得中...");
+                const service = await server.getPrimaryService(UART_SERVICE);
+                debugLog("✅ サービス取得");
+                
+                debugLog("✍️ Characteristic取得中...");
+                writeCharacteristic = await service.getCharacteristic(TX_CHARACTERISTIC);
+                debugLog("✅ Characteristic取得");
+                
+                connected = true;
+                updateUI(true);
+                
+                setTimeout(() => {
+                    if (connected) {
+                        sendCommand("up");
+                        sendCommand("down");
+                        sendCommand("left");
+                        sendCommand("right");
+                        debugLog("🎮 操作可能です！");
+                    }
+                }, 500);
+                
+            } catch (err) {
+                debugLog(`❌ エラー: ${err.message}`);
+                alert(`接続エラー: ${err.message}`);
+                connected = false;
+                updateUI(false);
+            }
+        }
+        
+        function disconnectBLE() {
+            if (device && device.gatt && device.gatt.connected) {
+                device.gatt.disconnect();
+            }
+            connected = false;
+            writeCharacteristic = null;
+            updateUI(false);
+            queue = [];
+            debugLog("切断完了");
+        }
+        
+        function bindPad(dir, pressCmd, releaseCmd) {
+            const btn = document.querySelector(`[data-dir="${dir}"]`);
+            if (!btn) return;
+            let repeatInterval = null;
+            let isPressed = false;
+            
+            function start() {
+                if (!connected || isPressed) return;
+                isPressed = true;
+                sendCommand(pressCmd);
+                repeatInterval = setInterval(() => {
+                    if (connected && isPressed) sendCommand(pressCmd);
+                    else stop();
+                }, 200);
+            }
+            
+            function stop() {
+                if (!isPressed) return;
+                isPressed = false;
+                if (repeatInterval) clearInterval(repeatInterval);
+                if (connected) sendCommand(releaseCmd);
+            }
+            
+            btn.addEventListener("mousedown", start);
+            btn.addEventListener("mouseup", stop);
+            btn.addEventListener("mouseleave", stop);
+            btn.addEventListener("touchstart", start, { passive: false });
+            btn.addEventListener("touchend", stop);
+        }
+        
+        let speedDebounce = null;
+        let lastSpeedCmd = "";
+        
+        function sendSpeed(value) {
+            const level = parseInt(value);
+            const table = [0, 4, 8, 12, 15];
+            const mapped = table[level] || 0;
+            const cmd = "c" + String(mapped).padStart(2, "0");
+            if (cmd === lastSpeedCmd) return;
+            lastSpeedCmd = cmd;
+            sendCommand(cmd);
+        }
+        
+        const speedSlider = document.getElementById("speedSlider");
+        const speedValueSpan = document.getElementById("speedValue");
+        if (speedSlider) {
+            speedSlider.addEventListener("input", (e) => {
+                if (speedValueSpan) speedValueSpan.textContent = e.target.value;
+                if (speedDebounce) clearTimeout(speedDebounce);
+                speedDebounce = setTimeout(() => sendSpeed(e.target.value), 150);
+            });
+        }
+        
+        const stopBtn = document.querySelector('[data-dir="STOP"]');
+        if (stopBtn) {
+            stopBtn.addEventListener("click", () => {
+                if (!connected) return;
+                sendCommand("up");
+                sendCommand("down");
+                sendCommand("left");
+                sendCommand("right");
+            });
+        }
+        
+        bindPad("UP", "UP", "up");
+        bindPad("DOWN", "DOWN", "down");
+        bindPad("LEFT", "LEFT", "left");
+        bindPad("RIGHT", "RIGHT", "right");
+        
+        if (connectBtn) connectBtn.onclick = connectBLE;
+        if (disconnectBtn) disconnectBtn.onclick = disconnectBLE;
+        
+        updateUI(false);
+        debugLog("✅ 準備完了 - 接続ボタンを押してください");
+    })();
+</script>
 </body>
 </html>
