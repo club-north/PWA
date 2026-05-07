@@ -1,7 +1,12 @@
 // ==========================================
 // micro:bit FPVカー PWA
-// 完全安定版 script.js
+// Android Chrome 最終安定版
+// script.js
 // ==========================================
+
+console.log(
+    "SCRIPT VERSION 2026"
+);
 
 // ==========================================
 // グローバル
@@ -16,7 +21,7 @@ let currentSpeed = 2;
 let videoStream = null;
 
 // ==========================================
-// micro:bit UART UUID
+// micro:bit BLE UART UUID
 // ==========================================
 const SERVICE_UUID =
     "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
@@ -31,13 +36,22 @@ async function connectBluetooth() {
 
     try {
 
+        console.log(
+            "Bluetooth検索開始"
+        );
+
         // ==================================
-        // 全BLEデバイス検索
+        // micro:bit検索
+        // Android Chrome 安定版
         // ==================================
         device =
             await navigator.bluetooth.requestDevice({
 
-                acceptAllDevices: true,
+                filters: [
+                    {
+                        namePrefix: "BBC"
+                    }
+                ],
 
                 optionalServices: [
                     SERVICE_UUID
@@ -45,7 +59,7 @@ async function connectBluetooth() {
             });
 
         console.log(
-            "device取得:",
+            "device:",
             device.name
         );
 
@@ -56,70 +70,31 @@ async function connectBluetooth() {
             await device.gatt.connect();
 
         console.log(
-            "GATT接続"
+            "GATT接続成功"
         );
 
         // ==================================
-        // Service一覧取得
+        // UART Service取得
         // ==================================
-        const services =
-            await server.getPrimaryServices();
-
-        console.log(
-            "service一覧:",
-            services
-        );
-
-        // ==================================
-        // UART Service検索
-        // ==================================
-        let uartService = null;
-
-        for (const s of services) {
-
-            console.log(
-                "UUID:",
-                s.uuid
+        const service =
+            await server.getPrimaryService(
+                SERVICE_UUID
             );
 
-            if (
-                s.uuid.includes(
-                    "6e400001"
-                )
-            ) {
-
-                uartService = s;
-
-                break;
-            }
-        }
-
-        // ==================================
-        // UART Serviceなし
-        // ==================================
-        if (!uartService) {
-
-            alert(
-                "UART Serviceなし\nmicro:bit側を確認"
-            );
-
-            return;
-        }
-
         console.log(
-            "UART service発見"
+            "UART Service OK"
         );
 
         // ==================================
-        // Characteristic取得
+        // RX characteristic取得
         // ==================================
         characteristic =
-            await uartService.getCharacteristic(
+            await service.getCharacteristic(
                 RX_CHARACTERISTIC_UUID
             );
 
         console.log(
-            "characteristic取得"
+            "Characteristic OK"
         );
 
         console.log(
@@ -134,12 +109,12 @@ async function connectBluetooth() {
 
         updateConnectionStatus(true);
 
-        console.log(
-            "BLE接続成功"
-        );
-
         showToast(
             "Bluetooth接続成功"
+        );
+
+        console.log(
+            "BLE接続成功"
         );
 
         // ==================================
@@ -160,12 +135,13 @@ async function connectBluetooth() {
     } catch(error) {
 
         console.error(
-            "BLE接続失敗:",
+            "接続失敗:",
             error
         );
 
-        showToast(
-            "Bluetooth接続失敗"
+        alert(
+            "Bluetooth接続失敗\n\n" +
+            error
         );
     }
 }
@@ -214,12 +190,13 @@ async function sendCommand(command) {
 
     try {
 
-        // ==================================
-        // 改行付き
-        // ==================================
         const encoder =
             new TextEncoder();
 
+        // ==================================
+        // 改行付き
+        // 超重要
+        // ==================================
         const data =
             encoder.encode(
                 command + "\n"
@@ -234,25 +211,22 @@ async function sendCommand(command) {
             );
 
         console.log(
-            "送信成功:",
+            "送信:",
             command
         );
 
     } catch(error) {
 
         console.error(
-            "送信エラー:",
+            "送信失敗:",
             error
-        );
-
-        showToast(
-            "送信失敗"
         );
     }
 }
 
 // ==========================================
 // 速度変更
+// SPD:xx
 // ==========================================
 async function setSpeed(level) {
 
@@ -300,7 +274,7 @@ async function setDirection(direction) {
 
     if (!connected) return;
 
-    // 同じ方向は送らない
+    // 同じ方向なら送らない
     if (
         direction === currentDirection
     ) {
