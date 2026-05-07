@@ -2,14 +2,8 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#1a1a2e">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="F1 Controller">
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="icon.png">
-    <title>F1 Controller - micro:bit Car</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>LoFi Control - micro:bit Car</title>
     <style>
         * {
             user-select: none;
@@ -21,7 +15,7 @@
             margin: 0;
             padding: 0;
             background: linear-gradient(145deg, #1a1a2e 0%, #0f0f1a 100%);
-            font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
+            font-family: 'Segoe UI', system-ui, sans-serif;
             min-height: 100vh;
             display: flex;
             justify-content: center;
@@ -34,52 +28,6 @@
             padding: 20px;
         }
 
-        /* インストールバナー */
-        .install-banner {
-            background: linear-gradient(135deg, #00a86b, #008855);
-            border-radius: 60px;
-            padding: 12px 20px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            cursor: pointer;
-            animation: slideDown 0.5s ease;
-        }
-
-        @keyframes slideDown {
-            from {
-                transform: translateY(-100%);
-                opacity: 0;
-            }
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
-
-        .install-banner.hidden {
-            display: none;
-        }
-
-        .install-text {
-            color: white;
-            font-weight: bold;
-            font-size: 14px;
-        }
-
-        .install-button {
-            background: white;
-            color: #00a86b;
-            border: none;
-            padding: 6px 16px;
-            border-radius: 30px;
-            font-weight: bold;
-            font-size: 12px;
-            cursor: pointer;
-        }
-
-        /* ステータスバー */
         .status-bar {
             display: flex;
             align-items: center;
@@ -89,7 +37,6 @@
             border-radius: 60px;
             margin-bottom: 24px;
             border: 1px solid rgba(255,255,255,0.1);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
             backdrop-filter: blur(10px);
         }
 
@@ -113,17 +60,6 @@
             box-shadow: 0 0 10px #33ff33;
         }
 
-        .led.connecting {
-            background: #ffaa00;
-            box-shadow: 0 0 10px #ffaa00;
-            animation: pulse 1s infinite;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-
         .status-text {
             color: white;
             font-weight: 600;
@@ -142,20 +78,12 @@
             transition: all 0.2s ease;
         }
 
-        button:active {
-            transform: scale(0.96);
-        }
-
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
+        button:active { transform: scale(0.96); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
 
         .connect-btn { background: #00a86b; }
         .disconnect-btn { background: #c41e3a; }
 
-        /* スピードコントロール */
         .speed-panel {
             background: rgba(10,10,18,0.9);
             border-radius: 40px;
@@ -189,10 +117,8 @@
             border-radius: 50%;
             cursor: pointer;
             border: 2px solid white;
-            box-shadow: 0 0 6px #00a86b;
         }
 
-        /* 十字キー */
         .dpad {
             display: grid;
             grid-template-columns: 1fr 1fr 1fr;
@@ -214,7 +140,6 @@
             box-shadow: 0 8px 0 rgba(0,0,0,0.3);
             border: 1px solid rgba(255,255,255,0.15);
             touch-action: manipulation;
-            backdrop-filter: blur(10px);
         }
 
         .pad-btn:active {
@@ -227,12 +152,6 @@
             box-shadow: 0 8px 0 #8b1529;
         }
 
-        .stop-btn:active {
-            transform: translateY(4px);
-            box-shadow: 0 4px 0 #8b1529;
-        }
-
-        /* 緊急停止ボタン */
         .emergency-btn {
             width: 100%;
             background: #ff4444;
@@ -240,11 +159,6 @@
             font-size: 18px;
             border-radius: 50px;
             margin-top: 8px;
-            box-shadow: 0 4px 12px rgba(255,0,0,0.3);
-        }
-
-        .emergency-btn:active {
-            transform: scale(0.98);
         }
 
         .info {
@@ -263,53 +177,11 @@
             background: rgba(0,0,0,0.5);
             padding: 8px;
             border-radius: 8px;
-            word-break: break-all;
-        }
-
-        /* トースト通知 */
-        .toast {
-            position: fixed;
-            bottom: 100px;
-            left: 20px;
-            right: 20px;
-            background: rgba(0,0,0,0.9);
-            color: white;
-            padding: 12px;
-            border-radius: 12px;
-            text-align: center;
-            z-index: 100;
-            animation: fadeInOut 2s ease;
-            pointer-events: none;
-        }
-
-        @keyframes fadeInOut {
-            0% { opacity: 0; transform: translateY(20px); }
-            15% { opacity: 1; transform: translateY(0); }
-            85% { opacity: 1; transform: translateY(0); }
-            100% { opacity: 0; transform: translateY(-20px); }
-        }
-
-        @media (max-width: 500px) {
-            .pad-btn {
-                padding: 16px 0;
-                font-size: 28px;
-            }
-            .dpad {
-                gap: 12px;
-                max-width: 240px;
-            }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- PWAインストールバナー -->
-        <div class="install-banner hidden" id="installBanner">
-            <div class="install-text">📱 アプリとしてインストール</div>
-            <button class="install-button" id="installBtn">インストール</button>
-        </div>
-
-        <!-- ステータスバー -->
         <div class="status-bar">
             <div class="status-indicator">
                 <div class="led" id="statusLed"></div>
@@ -321,7 +193,6 @@
             </div>
         </div>
 
-        <!-- スピード調整 -->
         <div class="speed-panel">
             <div class="speed-label">
                 <span>🐢 スピード</span>
@@ -331,7 +202,6 @@
             <input type="range" id="speedSlider" min="0" max="4" step="1" value="2">
         </div>
 
-        <!-- 十字キー -->
         <div class="dpad">
             <div></div>
             <div class="pad-btn" data-dir="UP">▲</div>
@@ -344,316 +214,277 @@
             <div></div>
         </div>
 
-        <!-- 緊急停止ボタン -->
         <button id="emergencyStop" class="emergency-btn">🛑 緊急停止</button>
-
-        <div class="info">
-            ⚡ ボタンを押し続けると連続送信<br>
-            ■ または 緊急停止ボタンですべての動作を停止
-        </div>
-
-        <div class="debug" id="debugInfo">⚡ 準備完了<br>接続ボタンを押してください</div>
+        <div class="info">⚡ ボタンを押し続けると連続送信</div>
+        <div class="debug" id="debugInfo">⚡ 準備完了</div>
     </div>
 
     <script>
-        // PWAインストール
-        let deferredPrompt = null;
-        const installBanner = document.getElementById('installBanner');
-        const installBtn = document.getElementById('installBtn');
-
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault();
-            deferredPrompt = e;
-            installBanner.classList.remove('hidden');
-        });
-
-        installBtn.addEventListener('click', async () => {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                const result = await deferredPrompt.userChoice;
-                if (result.outcome === 'accepted') {
-                    console.log('PWAインストール承認');
+        (function() {
+            'use strict';
+            
+            // ==========================================
+            // LoFi Control と同じUUID設定
+            // ==========================================
+            const UART_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+            // ★ LoFi Controlと同じ方法：TXで書き込み（6e400002-...）
+            const TX_CHARACTERISTIC = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+            
+            let device = null;
+            let server = null;
+            let writeCharacteristic = null;
+            let connected = false;
+            
+            const statusLed = document.getElementById("statusLed");
+            const statusText = document.getElementById("statusText");
+            const connectBtn = document.getElementById("connectBtn");
+            const disconnectBtn = document.getElementById("disconnectBtn");
+            const emergencyStopBtn = document.getElementById("emergencyStop");
+            const debugInfo = document.getElementById("debugInfo");
+            
+            let queue = [];
+            let sending = false;
+            
+            function debugLog(msg, isError = false) {
+                const timestamp = new Date().toLocaleTimeString();
+                const logMsg = `[${timestamp}] ${msg}`;
+                console.log(logMsg);
+                if (debugInfo) {
+                    debugInfo.innerHTML = logMsg;
+                    debugInfo.style.color = isError ? '#ff8888' : '#88ff88';
                 }
-                deferredPrompt = null;
-                installBanner.classList.add('hidden');
-            }
-        });
-
-        // ==========================================
-        // micro:bit BLE設定
-        // ==========================================
-        const UART_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-        const RX_CHARACTERISTIC = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
-        
-        let device = null;
-        let server = null;
-        let writeCharacteristic = null;
-        let connected = false;
-        let isConnecting = false;
-        
-        const statusLed = document.getElementById("statusLed");
-        const statusText = document.getElementById("statusText");
-        const connectBtn = document.getElementById("connectBtn");
-        const disconnectBtn = document.getElementById("disconnectBtn");
-        const emergencyStopBtn = document.getElementById("emergencyStop");
-        const debugInfo = document.getElementById("debugInfo");
-        
-        let queue = [];
-        let sending = false;
-        
-        // トースト表示
-        function showToast(message, isError = false) {
-            const toast = document.createElement('div');
-            toast.className = 'toast';
-            toast.textContent = message;
-            toast.style.background = isError ? 'rgba(196,30,58,0.95)' : 'rgba(0,168,107,0.95)';
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 2000);
-        }
-        
-        function debugLog(msg, isError = false) {
-            const timestamp = new Date().toLocaleTimeString();
-            const logMsg = `[${timestamp}] ${msg}`;
-            console.log(logMsg);
-            if (debugInfo) {
-                const lines = debugInfo.innerHTML.split('<br>');
-                lines.unshift(logMsg);
-                if (lines.length > 6) lines.pop();
-                debugInfo.innerHTML = lines.join('<br>');
-                const lastLine = debugInfo.querySelector('div');
-            }
-        }
-        
-        function updateUI(state, connecting = false) {
-            if (connecting) {
-                statusLed.className = 'led connecting';
-                statusText.textContent = "接続中...";
-                connectBtn.disabled = true;
-                disconnectBtn.disabled = true;
-            } else if (state) {
-                statusLed.className = 'led connected';
-                statusText.textContent = "接続中";
-                connectBtn.disabled = true;
-                disconnectBtn.disabled = false;
-            } else {
-                statusLed.className = 'led';
-                statusText.textContent = "未接続";
-                connectBtn.disabled = false;
-                disconnectBtn.disabled = true;
-            }
-        }
-        
-        async function writeToMicrobit(data) {
-            if (!writeCharacteristic || !connected) return false;
-            try {
-                await writeCharacteristic.writeValue(data);
-                return true;
-            } catch (e) {
-                return false;
-            }
-        }
-        
-        async function processQueue() {
-            if (sending) return;
-            if (queue.length === 0) return;
-            if (!connected || !writeCharacteristic) {
-                queue = [];
-                return;
-            }
-            sending = true;
-            const cmd = queue.shift();
-            try {
-                const encoder = new TextEncoder();
-                const data = encoder.encode(cmd);
-                await writeToMicrobit(data);
-            } catch (e) {}
-            sending = false;
-            setTimeout(processQueue, 50);
-        }
-        
-        function sendCommand(cmd) {
-            if (!connected || !writeCharacteristic) return;
-            queue.push(cmd + "\n");
-            processQueue();
-        }
-        
-        function emergencyStop() {
-            if (!connected) return;
-            debugLog("🛑 緊急停止");
-            sendCommand("up");
-            sendCommand("down");
-            sendCommand("left");
-            sendCommand("right");
-            showToast("🛑 緊急停止しました");
-        }
-        
-        async function connectBLE() {
-            if (connected || isConnecting) return;
-            
-            if (!navigator.bluetooth) {
-                const msg = "⚠️ Web Bluetooth未対応\nChromeまたはEdgeを使用してください";
-                debugLog(msg, true);
-                showToast(msg, true);
-                return;
             }
             
-            isConnecting = true;
-            updateUI(false, true);
-            debugLog("🔍 micro:bit検索中...");
-            debugLog("💡 デバイス選択ダイアログが表示されます");
-            showToast("🔍 micro:bitを選択してください");
+            function updateUI(state) {
+                if (state) {
+                    statusLed.classList.add("connected");
+                    statusText.textContent = "接続中";
+                    connectBtn.disabled = true;
+                    disconnectBtn.disabled = false;
+                } else {
+                    statusLed.classList.remove("connected");
+                    statusText.textContent = "未接続";
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                }
+            }
             
-            try {
-                device = await navigator.bluetooth.requestDevice({
-                    filters: [
-                        { namePrefix: "micro:bit" },
-                        { namePrefix: "BBC" }
-                    ],
-                    optionalServices: [UART_SERVICE]
-                });
+            // LoFi Controlと同じ書き込み方式
+            async function writeToMicrobit(data) {
+                if (!writeCharacteristic || !connected) return false;
+                try {
+                    await writeCharacteristic.writeValue(data);
+                    return true;
+                } catch (e) {
+                    debugLog(`送信エラー: ${e.message}`, true);
+                    return false;
+                }
+            }
+            
+            async function processQueue() {
+                if (sending) return;
+                if (queue.length === 0) return;
+                if (!connected || !writeCharacteristic) {
+                    queue = [];
+                    return;
+                }
+                sending = true;
+                const cmd = queue.shift();
+                try {
+                    const encoder = new TextEncoder();
+                    const data = encoder.encode(cmd);
+                    await writeToMicrobit(data);
+                    if (cmd.trim() !== "up" && cmd.trim() !== "down" && cmd.trim() !== "left" && cmd.trim() !== "right") {
+                        debugLog(`📤 ${cmd.trim()}`);
+                    }
+                } catch (e) {}
+                sending = false;
+                setTimeout(processQueue, 50);
+            }
+            
+            function sendCommand(cmd) {
+                if (!connected || !writeCharacteristic) return;
+                queue.push(cmd + "\n");
+                processQueue();
+            }
+            
+            function emergencyStop() {
+                if (!connected) return;
+                debugLog("🛑 緊急停止");
+                sendCommand("up");
+                sendCommand("down");
+                sendCommand("left");
+                sendCommand("right");
+            }
+            
+            // ==========================================
+            // ★ LoFi Controlと同じ接続方式
+            // ==========================================
+            async function connectBLE() {
+                if (connected) return;
                 
-                debugLog(`✅ 選択: ${device.name || "micro:bit"}`);
-                showToast(`✅ ${device.name || "micro:bit"} に接続中...`);
+                if (!navigator.bluetooth) {
+                    alert("ChromeまたはEdgeを使用してください");
+                    return;
+                }
                 
-                device.addEventListener("gattserverdisconnected", () => {
-                    debugLog("🔌 Bluetooth切断", true);
+                try {
+                    debugLog("🔍 Bluetoothデバイス検索中...");
+                    
+                    // ★ LoFi Controlと同じ：acceptAllDevices + optionalServices
+                    device = await navigator.bluetooth.requestDevice({
+                        acceptAllDevices: true,
+                        optionalServices: [UART_SERVICE]
+                    });
+                    
+                    debugLog(`✅ 選択: ${device.name || "micro:bit"}`);
+                    
+                    // 切断イベント
+                    device.addEventListener("gattserverdisconnected", () => {
+                        debugLog("🔌 Bluetooth切断", true);
+                        connected = false;
+                        writeCharacteristic = null;
+                        updateUI(false);
+                        queue = [];
+                    });
+                    
+                    debugLog("🔗 GATT接続中...");
+                    server = await device.gatt.connect();
+                    debugLog("✅ GATT接続完了");
+                    
+                    debugLog("📡 UARTサービス取得中...");
+                    const service = await server.getPrimaryService(UART_SERVICE);
+                    debugLog("✅ サービス取得完了");
+                    
+                    // ★ LoFi Controlと同じ：動的に書き込み可能なcharacteristicを探す
+                    const characteristics = await service.getCharacteristics();
+                    debugLog(`📊 ${characteristics.length}個のCharacteristicを確認`);
+                    
+                    // 書き込み可能なcharacteristicを探す
+                    for (const char of characteristics) {
+                        debugLog(`  - ${char.uuid}: write=${char.properties.write}, writeWithoutResponse=${char.properties.writeWithoutResponse}`);
+                        if (char.properties.write || char.properties.writeWithoutResponse) {
+                            writeCharacteristic = char;
+                            debugLog(`✅ 書き込み用Characteristicを選択: ${char.uuid}`);
+                            break;
+                        }
+                    }
+                    
+                    if (!writeCharacteristic) {
+                        throw new Error("書き込み可能なCharacteristicが見つかりません");
+                    }
+                    
+                    connected = true;
+                    updateUI(true);
+                    debugLog("🎉 接続成功！");
+                    
+                    // 初期化
+                    setTimeout(() => {
+                        if (connected) {
+                            emergencyStop();
+                            const speedSlider = document.getElementById("speedSlider");
+                            if (speedSlider) {
+                                const val = parseInt(speedSlider.value);
+                                const table = [0, 4, 8, 12, 15];
+                                const mapped = table[val];
+                                sendCommand("c" + String(mapped).padStart(2, "0"));
+                            }
+                            debugLog("🎮 操作可能です");
+                        }
+                    }, 500);
+                    
+                } catch (err) {
+                    debugLog(`❌ 接続エラー: ${err.message}`, true);
+                    if (!err.message.includes("cancel") && !err.message.includes("User cancelled")) {
+                        alert(`接続エラー: ${err.message}`);
+                    }
                     connected = false;
                     writeCharacteristic = null;
                     updateUI(false);
-                    queue = [];
-                    showToast("🔌 切断されました", true);
-                });
-                
-                debugLog("🔗 GATT接続中...");
-                server = await device.gatt.connect();
-                debugLog("✅ GATT接続完了");
-                
-                debugLog("📡 UARTサービス取得中...");
-                const service = await server.getPrimaryService(UART_SERVICE);
-                debugLog("✅ サービス取得完了");
-                
-                debugLog("✍️ RX Characteristic取得中...");
-                writeCharacteristic = await service.getCharacteristic(RX_CHARACTERISTIC);
-                debugLog("✅ Characteristic取得完了");
-                
-                connected = true;
-                isConnecting = false;
-                updateUI(true);
-                showToast("🎉 micro:bitに接続しました！");
-                
-                setTimeout(() => {
-                    if (connected) {
-                        emergencyStop();
-                        const speedSlider = document.getElementById("speedSlider");
-                        if (speedSlider) {
-                            const val = parseInt(speedSlider.value);
-                            const table = [0, 4, 8, 12, 15];
-                            const mapped = table[val];
-                            sendCommand("c" + String(mapped).padStart(2, "0"));
-                        }
-                        debugLog("🎮 操作可能です");
-                    }
-                }, 500);
-                
-            } catch (err) {
-                isConnecting = false;
-                
-                // ユーザーキャンセルはエラーとして扱わない
-                if (err.message.includes("cancel") || err.message.includes("User cancelled")) {
-                    debugLog("ℹ️ デバイス選択がキャンセルされました");
-                    showToast("ℹ️ キャンセルしました。もう一度お試しください");
-                    updateUI(false);
-                } else {
-                    debugLog(`❌ 接続エラー: ${err.message}`, true);
-                    showToast(`❌ 接続エラー: ${err.message}`, true);
-                    updateUI(false);
+                }
+            }
+            
+            function disconnectBLE() {
+                if (device && device.gatt && device.gatt.connected) {
+                    device.gatt.disconnect();
                 }
                 connected = false;
                 writeCharacteristic = null;
+                updateUI(false);
+                queue = [];
+                debugLog("切断完了");
             }
-        }
-        
-        function disconnectBLE() {
-            if (device && device.gatt && device.gatt.connected) {
-                device.gatt.disconnect();
-                showToast("🔌 切断しました");
+            
+            function bindPad(dir, pressCmd, releaseCmd) {
+                const btn = document.querySelector(`[data-dir="${dir}"]`);
+                if (!btn) return;
+                let repeatInterval = null;
+                let isPressed = false;
+                function start() {
+                    if (!connected || isPressed) return;
+                    isPressed = true;
+                    sendCommand(pressCmd);
+                    repeatInterval = setInterval(() => {
+                        if (connected && isPressed) sendCommand(pressCmd);
+                        else stop();
+                    }, 150);
+                }
+                function stop() {
+                    if (!isPressed) return;
+                    isPressed = false;
+                    if (repeatInterval) clearInterval(repeatInterval);
+                    if (connected) sendCommand(releaseCmd);
+                }
+                btn.addEventListener("mousedown", start);
+                btn.addEventListener("mouseup", stop);
+                btn.addEventListener("mouseleave", stop);
+                btn.addEventListener("touchstart", start, { passive: false });
+                btn.addEventListener("touchend", stop);
             }
-            connected = false;
-            writeCharacteristic = null;
+            
+            let speedDebounce = null;
+            let lastSpeedCmd = "";
+            
+            function sendSpeed(value) {
+                if (!connected) return;
+                const level = parseInt(value);
+                const table = [0, 4, 8, 12, 15];
+                const mapped = table[level] || 0;
+                const cmd = "c" + String(mapped).padStart(2, "0");
+                if (cmd === lastSpeedCmd) return;
+                lastSpeedCmd = cmd;
+                sendCommand(cmd);
+            }
+            
+            const speedSlider = document.getElementById("speedSlider");
+            const speedValueSpan = document.getElementById("speedValue");
+            if (speedSlider) {
+                speedSlider.addEventListener("input", (e) => {
+                    if (speedValueSpan) speedValueSpan.textContent = e.target.value;
+                    if (speedDebounce) clearTimeout(speedDebounce);
+                    speedDebounce = setTimeout(() => sendSpeed(e.target.value), 100);
+                });
+            }
+            
+            document.querySelector('[data-dir="STOP"]')?.addEventListener("click", () => emergencyStop());
+            emergencyStopBtn?.addEventListener("click", () => emergencyStop());
+            
+            bindPad("UP", "UP", "up");
+            bindPad("DOWN", "DOWN", "down");
+            bindPad("LEFT", "LEFT", "left");
+            bindPad("RIGHT", "RIGHT", "right");
+            
+            connectBtn.onclick = connectBLE;
+            disconnectBtn.onclick = disconnectBLE;
+            
             updateUI(false);
-            queue = [];
-            debugLog("切断完了");
-        }
-        
-        function bindPad(dir, pressCmd, releaseCmd) {
-            const btn = document.querySelector(`[data-dir="${dir}"]`);
-            if (!btn) return;
-            let repeatInterval = null;
-            let isPressed = false;
-            function start() {
-                if (!connected || isPressed) return;
-                isPressed = true;
-                sendCommand(pressCmd);
-                repeatInterval = setInterval(() => {
-                    if (connected && isPressed) sendCommand(pressCmd);
-                    else stop();
-                }, 150);
+            debugLog("✅ LoFi Control方式 PWA起動");
+            debugLog("📌 接続ボタンを押してください");
+            
+            if (!navigator.bluetooth) {
+                debugLog("❌ Web Bluetooth未対応", true);
             }
-            function stop() {
-                if (!isPressed) return;
-                isPressed = false;
-                if (repeatInterval) clearInterval(repeatInterval);
-                if (connected) sendCommand(releaseCmd);
-            }
-            btn.addEventListener("mousedown", start);
-            btn.addEventListener("mouseup", stop);
-            btn.addEventListener("mouseleave", stop);
-            btn.addEventListener("touchstart", start, { passive: false });
-            btn.addEventListener("touchend", stop);
-        }
-        
-        let speedDebounce = null;
-        let lastSpeedCmd = "";
-        
-        function sendSpeed(value) {
-            if (!connected) return;
-            const level = parseInt(value);
-            const table = [0, 4, 8, 12, 15];
-            const mapped = table[level] || 0;
-            const cmd = "c" + String(mapped).padStart(2, "0");
-            if (cmd === lastSpeedCmd) return;
-            lastSpeedCmd = cmd;
-            sendCommand(cmd);
-        }
-        
-        const speedSlider = document.getElementById("speedSlider");
-        const speedValueSpan = document.getElementById("speedValue");
-        if (speedSlider) {
-            speedSlider.addEventListener("input", (e) => {
-                if (speedValueSpan) speedValueSpan.textContent = e.target.value;
-                if (speedDebounce) clearTimeout(speedDebounce);
-                speedDebounce = setTimeout(() => sendSpeed(e.target.value), 100);
-            });
-        }
-        
-        document.querySelector('[data-dir="STOP"]')?.addEventListener("click", () => emergencyStop());
-        emergencyStopBtn?.addEventListener("click", () => emergencyStop());
-        
-        bindPad("UP", "UP", "up");
-        bindPad("DOWN", "DOWN", "down");
-        bindPad("LEFT", "LEFT", "left");
-        bindPad("RIGHT", "RIGHT", "right");
-        
-        connectBtn.onclick = connectBLE;
-        disconnectBtn.onclick = disconnectBLE;
-        
-        updateUI(false);
-        debugLog("✅ F1 Controller PWA起動");
-        debugLog("📌 接続ボタン → micro:bitを選択");
-        
-        if (!navigator.bluetooth) {
-            debugLog("❌ Web Bluetooth未対応 - Chrome/Edgeが必要", true);
-        }
+        })();
     </script>
 </body>
 </html>
