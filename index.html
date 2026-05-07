@@ -427,8 +427,13 @@
                 }, 500);
                 
             } catch (err) {
-                debugLog(`❌ エラー: ${err.message}`, true);
-                alert(`接続エラー: ${err.message}`);
+                // キャンセルされた場合のエラーハンドリングを追加
+                if (err.name === 'NotFoundError' || err.message.includes('cancelled')) {
+                    debugLog("ℹ️ デバイスの選択がキャンセルされました");
+                } else {
+                    debugLog(`❌ エラー: ${err.message}`, true);
+                    alert(`接続エラー: ${err.message}`);
+                }
                 connected = false;
                 writeChar = null;
                 updateUI(false);
