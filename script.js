@@ -1,6 +1,6 @@
 // ==========================================
 // micro:bit FPVカー PWA
-// 最終安定版 script.js
+// 完全安定版 script.js
 // ==========================================
 
 // ==========================================
@@ -16,7 +16,7 @@ let currentSpeed = 2;
 let videoStream = null;
 
 // ==========================================
-// micro:bit BLE UART UUID
+// micro:bit UART UUID
 // ==========================================
 const SERVICE_UUID =
     "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
@@ -32,17 +32,12 @@ async function connectBluetooth() {
     try {
 
         // ==================================
-        // micro:bit検索
+        // 全BLEデバイス検索
         // ==================================
         device =
             await navigator.bluetooth.requestDevice({
 
-                filters: [
-                    {
-                        namePrefix:
-                            "BBC micro:bit"
-                    }
-                ],
+                acceptAllDevices: true,
 
                 optionalServices: [
                     SERVICE_UUID
@@ -50,7 +45,8 @@ async function connectBluetooth() {
             });
 
         console.log(
-            "device取得"
+            "device取得:",
+            device.name
         );
 
         // ==================================
@@ -64,39 +60,66 @@ async function connectBluetooth() {
         );
 
         // ==================================
-        // service一覧
+        // Service一覧取得
         // ==================================
+        const services =
+            await server.getPrimaryServices();
+
         console.log(
             "service一覧:",
-            await server.getPrimaryServices()
+            services
         );
 
         // ==================================
-        // UART service取得
+        // UART Service検索
         // ==================================
-        const service =
-            await server.getPrimaryService(
-                SERVICE_UUID
+        let uartService = null;
+
+        for (const s of services) {
+
+            console.log(
+                "UUID:",
+                s.uuid
             );
 
+            if (
+                s.uuid.includes(
+                    "6e400001"
+                )
+            ) {
+
+                uartService = s;
+
+                break;
+            }
+        }
+
+        // ==================================
+        // UART Serviceなし
+        // ==================================
+        if (!uartService) {
+
+            alert(
+                "UART Serviceなし\nmicro:bit側を確認"
+            );
+
+            return;
+        }
+
         console.log(
-            "service取得"
+            "UART service発見"
         );
 
         // ==================================
-        // RX characteristic取得
+        // Characteristic取得
         // ==================================
         characteristic =
-            await service.getCharacteristic(
+            await uartService.getCharacteristic(
                 RX_CHARACTERISTIC_UUID
             );
 
         console.log(
-            "RX characteristic取得"
-        );
-
-        console.log(
-            characteristic
+            "characteristic取得"
         );
 
         console.log(
@@ -120,7 +143,7 @@ async function connectBluetooth() {
         );
 
         // ==================================
-        // 切断イベント
+        // 切断監視
         // ==================================
         device.addEventListener(
             "gattserverdisconnected",
@@ -203,7 +226,7 @@ async function sendCommand(command) {
             );
 
         // ==================================
-        // writeWithoutResponse
+        // Android Chrome 安定版
         // ==================================
         await characteristic
             .writeValueWithoutResponse(
@@ -230,7 +253,6 @@ async function sendCommand(command) {
 
 // ==========================================
 // 速度変更
-// SPD:xx
 // ==========================================
 async function setSpeed(level) {
 
@@ -248,7 +270,6 @@ async function setSpeed(level) {
     const realSpeed =
         speedMap[level];
 
-    // SPD形式
     const command =
         `SPD:${realSpeed}`;
 
