@@ -1,7 +1,6 @@
 // ==========================================
 // micro:bit FPVカー PWA
-// 完全安定版 script.js
-// LOFI Control互換
+// 完全修正版 script.js
 // ==========================================
 
 // ==========================================
@@ -14,25 +13,13 @@ let connected = false;
 let currentDirection = "STOP";
 let currentSpeed = 2;
 
-// ジョイスティック
-let joystickActive = false;
-
-let joystickCenter = {
-    x: 0,
-    y: 0
-};
-
-// カメラ
 let videoStream = null;
 
 // ==========================================
-// micro:bit BLE UART UUID
+// micro:bit UART Service UUID
 // ==========================================
 const SERVICE_UUID =
     "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-
-const CHARACTERISTIC_UUID =
-    "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
 
 // ==========================================
 // Bluetooth接続
@@ -41,6 +28,9 @@ async function connectBluetooth() {
 
     try {
 
+        // ==================================
+        // デバイス選択
+        // ==================================
         device =
             await navigator.bluetooth.requestDevice({
 
@@ -49,49 +39,112 @@ async function connectBluetooth() {
                 optionalServices: [
                     SERVICE_UUID
                 ]
-
             });
 
-        console.log("device取得");
+        console.log(
+            "device取得"
+        );
 
+        // ==================================
+        // GATT接続
+        // ==================================
         const server =
             await device.gatt.connect();
 
-        console.log("GATT接続");
+        console.log(
+            "GATT connected"
+        );
 
+        // ==================================
+        // Service取得
+        // ==================================
         const service =
             await server.getPrimaryService(
                 SERVICE_UUID
             );
 
-        console.log("service取得");
+        console.log(
+            "service取得"
+        );
 
-        characteristic =
-            await service.getCharacteristic(
-                CHARACTERISTIC_UUID
+        // ==================================
+        // characteristic自動探索
+        // ==================================
+        const characteristics =
+            await service.getCharacteristics();
+
+        console.log(
+            "characteristics:",
+            characteristics
+        );
+
+        for (const c of characteristics) {
+
+            console.log(
+                "UUID:",
+                c.uuid
             );
 
-        console.log("characteristic取得");
+            console.log(
+                "properties:",
+                c.properties
+            );
 
+            // ==============================
+            // write可能 characteristic
+            // ==============================
+            if (
+                c.properties.write ||
+                c.properties.writeWithoutResponse
+            ) {
+
+                characteristic = c;
+
+                console.log(
+                    "WRITE characteristic発見:",
+                    c.uuid
+                );
+
+                break;
+            }
+        }
+
+        // ==================================
+        // 見つからない
+        // ==================================
+        if (!characteristic) {
+
+            throw new Error(
+                "write characteristic無し"
+            );
+        }
+
+        // ==================================
+        // 接続成功
+        // ==================================
         connected = true;
 
         updateConnectionStatus(true);
-
-        // 切断監視
-        device.addEventListener(
-            "gattserverdisconnected",
-            onDisconnected
-        );
 
         showToast(
             "Bluetooth接続成功"
         );
 
         console.log(
-            "BLE接続成功"
+            "BLE connected"
         );
 
+        // ==================================
+        // 切断監視
+        // ==================================
+        device.addEventListener(
+            "gattserverdisconnected",
+            onDisconnected
+        );
+
+        // ==================================
         // 初期速度送信
+        // ==================================
         setSpeed(currentSpeed);
 
     } catch(error) {
@@ -116,12 +169,12 @@ function onDisconnected() {
 
     updateConnectionStatus(false);
 
-    showToast(
-        "切断されました"
+    console.log(
+        "BLE disconnected"
     );
 
-    console.log(
-        "BLE切断"
+    showToast(
+        "切断されました"
     );
 }
 
@@ -161,12 +214,11 @@ async function sendCommand(command) {
             );
 
         // ==================================
-        // micro:bit BLE UART 安定版
+        // micro:bit UART送信
         // ==================================
-        await characteristic
-            .writeValue(
-                data
-            );
+        await characteristic.writeValue(
+            data
+        );
 
         console.log(
             "送信成功:",
@@ -181,19 +233,19 @@ async function sendCommand(command) {
         );
 
         showToast(
-            "送信エラー"
+            "送信失敗"
         );
     }
 }
 
 // ==========================================
 // 速度変更
-// SPD:xx
 // ==========================================
 async function setSpeed(level) {
 
     currentSpeed = level;
 
+    // micro:bit側 MAX_SPEED対応
     const speedMap = [
         15,
         25,
@@ -233,7 +285,7 @@ async function setDirection(direction) {
 
     if (!connected) return;
 
-    // 同じ方向なら送信しない
+    // 同じ方向なら送らない
     if (
         direction === currentDirection
     ) {
@@ -267,11 +319,6 @@ async function setDirection(direction) {
     }
 
     await sendCommand(command);
-
-    console.log(
-        "方向:",
-        command
-    );
 }
 
 // ==========================================
@@ -330,7 +377,7 @@ function updateConnectionStatus(
 }
 
 // ==========================================
-// カメラ
+// カメラ起動
 // ==========================================
 async function startCamera() {
 
@@ -394,39 +441,35 @@ function initJoystick() {
             "joystickThumb"
         );
 
-    // 開始
+    let active = false;
+
+    let centerX = 0;
+    let centerY = 0;
+
     function start(x, y) {
 
-        joystickActive = true;
+        active = true;
 
         const rect =
             base.getBoundingClientRect();
 
-        joystickCenter = {
+        centerX =
+            rect.left +
+            rect.width / 2;
 
-            x:
-                rect.left +
-                rect.width / 2,
-
-            y:
-                rect.top +
-                rect.height / 2
-        };
+        centerY =
+            rect.top +
+            rect.height / 2;
 
         move(x, y);
     }
 
-    // 移動
     function move(x, y) {
 
-        if (!joystickActive)
-            return;
+        if (!active) return;
 
-        let dx =
-            x - joystickCenter.x;
-
-        let dy =
-            y - joystickCenter.y;
+        let dx = x - centerX;
+        let dy = y - centerY;
 
         const max = 60;
 
@@ -435,7 +478,6 @@ function initJoystick() {
                 dx*dx + dy*dy
             );
 
-        // 半径制限
         if (dist > max) {
 
             dx =
@@ -448,10 +490,9 @@ function initJoystick() {
         thumb.style.transform =
             `translate(${dx}px, ${dy}px)`;
 
-        // デッドゾーン
-        const dead = 20;
-
         let dir = "STOP";
+
+        const dead = 20;
 
         if (
             Math.abs(dx) > dead ||
@@ -480,10 +521,9 @@ function initJoystick() {
         setDirection(dir);
     }
 
-    // 終了
     function end() {
 
-        joystickActive = false;
+        active = false;
 
         thumb.style.transform =
             "translate(0px,0px)";
@@ -512,8 +552,7 @@ function initJoystick() {
         "touchmove",
         (e) => {
 
-            if (!joystickActive)
-                return;
+            if (!active) return;
 
             e.preventDefault();
 
@@ -550,8 +589,7 @@ function initJoystick() {
         "mousemove",
         (e) => {
 
-            if (!joystickActive)
-                return;
+            if (!active) return;
 
             move(
                 e.clientX,
@@ -581,7 +619,6 @@ function initDpad() {
         const dir =
             btn.dataset.dir;
 
-        // 押した
         function press(e) {
 
             e.preventDefault();
@@ -589,7 +626,6 @@ function initDpad() {
             setDirection(dir);
         }
 
-        // 離した
         function release(e) {
 
             e.preventDefault();
@@ -620,7 +656,7 @@ function initDpad() {
 }
 
 // ==========================================
-// トースト
+// Toast
 // ==========================================
 function showToast(message) {
 
@@ -629,7 +665,8 @@ function showToast(message) {
             "div"
         );
 
-    toast.textContent = message;
+    toast.textContent =
+        message;
 
     toast.style.position =
         "fixed";
