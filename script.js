@@ -1,365 +1,99 @@
-// ==========================================
-// micro:bit FPVカー PWA
-// LOFI Control互換 安定版
-// script.js
-// ==========================================
+// ============================================
+// micro:bit FPV Car Controller
+// LoFi Control互換
+// micro:bit UART完全対応版
+// ============================================
 
-console.log("SCRIPT VERSION LOFI FIX");
 
-// ==========================================
-// グローバル
-// ==========================================
+// ============================================
+// BLE UUID
+// ============================================
+
+const UART_SERVICE =
+"6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+
+const UART_TX =
+"6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+
+
+// ============================================
+// BLE変数
+// ============================================
+
 let device = null;
 let server = null;
 let service = null;
-let characteristic = null;
+let txCharacteristic = null;
 
 let connected = false;
 
-let currentDirection = "STOP";
-let currentSpeed = 2;
-
-let videoStream = null;
-
-// ==========================================
-// Nordic UART Service UUID
-// ==========================================
-const SERVICE_UUID =
-    "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-
-// micro:bitへ送信（WRITE）
-const RX_CHARACTERISTIC_UUID =
-    "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
-
-// micro:bitから受信（NOTIFY）
-const TX_CHARACTERISTIC_UUID =
-    "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
-
-// ==========================================
-// Bluetooth接続
-// ==========================================
-async function connectBluetooth() {
-
-    try {
-
-        console.log("Bluetooth検索開始");
-
-        // ==================================
-        // micro:bit検索
-        // ==================================
-        device =
-            await navigator.bluetooth.requestDevice({
-
-                filters: [
-                    {
-                        namePrefix:
-                            "BBC micro:bit"
-                    }
-                ],
-
-                optionalServices: [
-                    SERVICE_UUID
-                ]
-            });
-
-        console.log(
-            "device取得:",
-            device.name
-        );
-
-        // ==================================
-        // GATT接続
-        // ==================================
-        server =
-            await device.gatt.connect();
-
-        console.log("GATT接続");
-
-        // ==================================
-        // UART Service取得
-        // ==================================
-        service =
-            await server.getPrimaryService(
-                SERVICE_UUID
-            );
-
-        console.log("service取得");
-
-        // ==================================
-        // WRITE characteristic取得
-        // ==================================
-        characteristic =
-            await service.getCharacteristic(
-                RX_CHARACTERISTIC_UUID
-            );
-
-        console.log(
-            "characteristic取得"
-        );
-
-        console.log(
-            characteristic.properties
-        );
-
-        // ==================================
-        // 接続成功
-        // ==================================
-        connected = true;
-
-        updateConnectionStatus(true);
-
-        showToast(
-            "Bluetooth接続成功"
-        );
-
-        console.log(
-            "BLE接続成功"
-        );
-
-        // ==================================
-        // 切断監視
-        // ==================================
-        device.addEventListener(
-            "gattserverdisconnected",
-            onDisconnected
-        );
-
-        // ==================================
-        // 初期速度送信
-        // ==================================
-        await setSpeed(
-            currentSpeed
-        );
-
-    } catch(error) {
-
-        console.error(
-            "BLE接続失敗:",
-            error
-        );
-
-        alert(
-            "Bluetooth接続失敗\n\n" +
-            error
-        );
-    }
-}
-
-// ==========================================
-// 切断
-// ==========================================
-function onDisconnected() {
-
-    connected = false;
-
-    updateConnectionStatus(false);
-
-    console.log("BLE切断");
-
-    showToast(
-        "切断されました"
-    );
-}
-
-function disconnectBluetooth() {
-
-    if (
-        device &&
-        device.gatt.connected
-    ) {
-
-        device.gatt.disconnect();
-    }
-
-    connected = false;
-
-    updateConnectionStatus(false);
-}
-
-// ==========================================
-// UART送信
-// writeValue版
-// ==========================================
-async function sendCommand(command) {
-
-    if (!connected) return;
-
-    if (!characteristic) return;
-
-    try {
-
-        const encoder =
-            new TextEncoder();
-
-        // 改行付き
-        const data =
-            encoder.encode(
-                command + "\n"
-            );
-
-        // ==================================
-        // LOFI互換
-        // ==================================
-        await characteristic.writeValue(
-            data
-        );
-
-        console.log(
-            "送信:",
-            command
-        );
-
-    } catch(error) {
-
-        console.error(
-            "送信エラー:",
-            error
-        );
-    }
-}
-
-// ==========================================
-// 速度変更
-// SPD:xx
-// ==========================================
-async function setSpeed(level) {
-
-    currentSpeed = level;
-
-    // micro:bit速度変換
-    const speedMap = [
-        15,
-        25,
-        35,
-        45,
-        60
-    ];
-
-    const realSpeed =
-        speedMap[level];
-
-    const command =
-        `SPD:${realSpeed}`;
-
-    console.log(
-        "速度:",
-        realSpeed
-    );
-
-    await sendCommand(
-        command
-    );
-
-    // UI更新
-    document.getElementById(
-        "speedValue"
-    ).textContent = level;
-
-    document.getElementById(
-        "speedBar"
-    ).style.width =
-        `${(level / 4) * 100}%`;
-}
-
-// ==========================================
-// 方向制御
-// ==========================================
-async function setDirection(direction) {
-
-    if (!connected) return;
-
-    // 同じ方向なら送らない
-    if (
-        direction === currentDirection
-    ) {
-        return;
-    }
-
-    currentDirection = direction;
-
-    let command = "S";
-
-    switch(direction) {
-
-        case "UP":
-            command = "F";
-            break;
-
-        case "DOWN":
-            command = "B";
-            break;
-
-        case "LEFT":
-            command = "L";
-            break;
-
-        case "RIGHT":
-            command = "R";
-            break;
-
-        default:
-            command = "S";
-            break;
-    }
-
-    console.log(
-        "方向:",
-        command
-    );
-
-    await sendCommand(
-        command
-    );
-}
-
-// ==========================================
-// 接続UI
-// ==========================================
-function updateConnectionStatus(
-    isConnected
-) {
-
-    const statusLed =
-        document.getElementById(
-            "statusLed"
-        );
-
-    const statusText =
-        document.getElementById(
-            "statusText"
-        );
-
-    const connectBtn =
-        document.getElementById(
-            "connectBtn"
-        );
-
-    const disconnectBtn =
-        document.getElementById(
-            "disconnectBtn"
-        );
-
-    if (isConnected) {
-
-        statusLed.classList.add(
-            "connected"
-        );
+
+// ============================================
+// HTML要素
+// ============================================
+
+const statusLed =
+document.getElementById("statusLed");
+
+const statusText =
+document.getElementById("statusText");
+
+const connectBtn =
+document.getElementById("connectBtn");
+
+const disconnectBtn =
+document.getElementById("disconnectBtn");
+
+const speedSlider =
+document.getElementById("speedSlider");
+
+const speedValue =
+document.getElementById("speedValue");
+
+const speedBar =
+document.getElementById("speedBar");
+
+const leftTrim =
+document.getElementById("leftTrim");
+
+const rightTrim =
+document.getElementById("rightTrim");
+
+const leftTrimVal =
+document.getElementById("leftTrimVal");
+
+const rightTrimVal =
+document.getElementById("rightTrimVal");
+
+const resetTrim =
+document.getElementById("resetTrim");
+
+
+// ============================================
+// 接続状態表示
+// ============================================
+
+function updateConnectionUI(state){
+
+    connected = state;
+
+    if(state){
+
+        statusLed.classList.add("connected");
 
         statusText.textContent =
-            "接続済み";
+        "接続済み";
 
         connectBtn.disabled = true;
 
         disconnectBtn.disabled = false;
 
-    } else {
+    }else{
 
-        statusLed.classList.remove(
-            "connected"
-        );
+        statusLed.classList.remove("connected");
 
         statusText.textContent =
-            "未接続";
+        "未接続";
 
         connectBtn.disabled = false;
 
@@ -367,407 +101,376 @@ function updateConnectionStatus(
     }
 }
 
-// ==========================================
-// カメラ
-// ==========================================
-async function startCamera() {
 
-    try {
+// ============================================
+// BLE接続
+// ============================================
 
-        videoStream =
-            await navigator
-                .mediaDevices
-                .getUserMedia({
+async function connectBLE(){
 
-                    video: {
-                        facingMode: {
-                            ideal:
-                                "environment"
-                        }
-                    }
+    try{
 
-                });
+        device =
+        await navigator.bluetooth.requestDevice({
 
-        const video =
-            document.getElementById(
-                "video"
-            );
+            filters:[
+                {
+                    namePrefix:"BBC micro:bit"
+                }
+            ],
 
-        video.srcObject =
-            videoStream;
+            optionalServices:[
+                UART_SERVICE
+            ]
+        });
 
-        document.getElementById(
-            "videoOverlay"
-        ).style.display =
-            "none";
 
-        showToast(
-            "カメラ起動"
+        device.addEventListener(
+            "gattserverdisconnected",
+            onDisconnected
         );
 
-    } catch(error) {
 
-        console.error(
-            "カメラエラー:",
-            error
+        server =
+        await device.gatt.connect();
+
+
+        service =
+        await server.getPrimaryService(
+            UART_SERVICE
         );
 
-        showToast(
-            "カメラ使用不可"
+
+        txCharacteristic =
+        await service.getCharacteristic(
+            UART_TX
         );
+
+
+        updateConnectionUI(true);
+
+        console.log("BLE Connected");
+
+    }catch(e){
+
+        console.log(e);
+
+        alert("Bluetooth接続失敗");
     }
 }
 
-// ==========================================
-// ジョイスティック
-// ==========================================
-function initJoystick() {
 
-    const base =
-        document.getElementById(
-            "joystickBase"
+// ============================================
+// 切断
+// ============================================
+
+function disconnectBLE(){
+
+    if(device && device.gatt.connected){
+
+        device.gatt.disconnect();
+    }
+}
+
+
+// ============================================
+// 切断イベント
+// ============================================
+
+function onDisconnected(){
+
+    updateConnectionUI(false);
+
+    console.log("BLE Disconnected");
+}
+
+
+// ============================================
+// UART送信
+// micro:bit側は
+// uart_read_until(NEW_LINE)
+// を使用しているため
+// 改行必須
+// ============================================
+
+async function send(text){
+
+    if(!txCharacteristic)return;
+
+    try{
+
+        const data =
+        new TextEncoder().encode(
+            text + "\n"
         );
 
-    const thumb =
-        document.getElementById(
-            "joystickThumb"
+        await txCharacteristic
+        .writeValueWithoutResponse(
+            data
         );
 
-    let active = false;
+        console.log("SEND:", text);
 
-    let centerX = 0;
-    let centerY = 0;
+    }catch(e){
 
-    function start(x, y) {
-
-        active = true;
-
-        const rect =
-            base.getBoundingClientRect();
-
-        centerX =
-            rect.left +
-            rect.width / 2;
-
-        centerY =
-            rect.top +
-            rect.height / 2;
-
-        move(x, y);
+        console.log(e);
     }
+}
 
-    function move(x, y) {
 
-        if (!active) return;
+// ============================================
+// 速度変換
+// HTML 0-4
+// micro:bit c00-c15
+// ============================================
 
-        let dx =
-            x - centerX;
+function convertSpeed(level){
 
-        let dy =
-            y - centerY;
+    if(level == 0)return 1;
+    if(level == 1)return 4;
+    if(level == 2)return 8;
+    if(level == 3)return 12;
+    if(level == 4)return 15;
 
-        const max = 60;
+    return 8;
+}
 
-        const dist =
-            Math.sqrt(
-                dx * dx +
-                dy * dy
-            );
 
-        if (dist > max) {
+// ============================================
+// スピードUI更新
+// ============================================
 
-            dx =
-                dx / dist * max;
+function updateSpeedUI(level){
 
-            dy =
-                dy / dist * max;
-        }
+    speedValue.textContent = level;
 
-        thumb.style.transform =
-            `translate(${dx}px, ${dy}px)`;
+    speedBar.style.width =
+    ((level / 4) * 100) + "%";
+}
 
-        let dir = "STOP";
 
-        const dead = 20;
+// ============================================
+// スピード送信
+// ============================================
 
-        if (
-            Math.abs(dx) > dead ||
-            Math.abs(dy) > dead
-        ) {
+function sendSpeed(level){
 
-            if (
-                Math.abs(dy) >
-                Math.abs(dx)
-            ) {
+    const value =
+    convertSpeed(level);
 
-                dir =
-                    dy < 0
-                    ? "UP"
-                    : "DOWN";
+    const cmd =
+    "c" +
+    String(value).padStart(2,"0");
 
-            } else {
+    send(cmd);
+}
 
-                dir =
-                    dx < 0
-                    ? "LEFT"
-                    : "RIGHT";
-            }
-        }
 
-        setDirection(dir);
+// ============================================
+// スライダー
+// ============================================
+
+speedSlider.addEventListener(
+    "input",
+    e=>{
+
+        const level =
+        parseInt(e.target.value);
+
+        updateSpeedUI(level);
+
+        sendSpeed(level);
     }
+);
 
-    function end() {
 
-        active = false;
+// ============================================
+// トリムUI
+// （micro:bitへは送らない）
+// ============================================
 
-        thumb.style.transform =
-            "translate(0px,0px)";
+leftTrim.addEventListener(
+    "input",
+    e=>{
 
-        setDirection("STOP");
+        leftTrimVal.textContent =
+        e.target.value;
     }
+);
 
-    // touch
-    thumb.addEventListener(
-        "touchstart",
-        (e) => {
+rightTrim.addEventListener(
+    "input",
+    e=>{
 
-            e.preventDefault();
+        rightTrimVal.textContent =
+        e.target.value;
+    }
+);
 
-            const t =
-                e.touches[0];
 
-            start(
-                t.clientX,
-                t.clientY
-            );
+// ============================================
+// トリムリセット
+// ============================================
+
+resetTrim.onclick = ()=>{
+
+    leftTrim.value = 8;
+    rightTrim.value = 0;
+
+    leftTrimVal.textContent = 8;
+    rightTrimVal.textContent = 0;
+};
+
+
+// ============================================
+// 十字キー制御
+// ============================================
+
+const releaseMap = {
+
+    "UP":"up",
+    "DOWN":"down",
+    "LEFT":"left",
+    "RIGHT":"right"
+};
+
+
+document
+.querySelectorAll(".dpad-btn")
+.forEach(btn=>{
+
+    const dir =
+    btn.dataset.dir;
+
+    let timer = null;
+
+
+    // =========================
+    // 押した時
+    // =========================
+
+    const start = ()=>{
+
+        if(!connected)return;
+
+
+        if(dir === "STOP"){
+
+            send("up");
+            send("down");
+            send("left");
+            send("right");
+
+            return;
         }
-    );
 
-    window.addEventListener(
-        "touchmove",
-        (e) => {
 
-            if (!active) return;
+        send(dir);
 
-            e.preventDefault();
 
-            const t =
-                e.touches[0];
+        timer = setInterval(()=>{
 
-            move(
-                t.clientX,
-                t.clientY
-            );
+            send(dir);
+
+        },120);
+    };
+
+
+    // =========================
+    // 離した時
+    // =========================
+
+    const stop = ()=>{
+
+        clearInterval(timer);
+
+
+        if(releaseMap[dir]){
+
+            send(releaseMap[dir]);
         }
-    );
+    };
 
-    window.addEventListener(
-        "touchend",
-        end
-    );
 
-    // mouse
-    thumb.addEventListener(
+    // =========================
+    // マウス
+    // =========================
+
+    btn.addEventListener(
         "mousedown",
-        (e) => {
-
-            e.preventDefault();
-
-            start(
-                e.clientX,
-                e.clientY
-            );
-        }
+        start
     );
 
-    window.addEventListener(
-        "mousemove",
-        (e) => {
-
-            if (!active) return;
-
-            move(
-                e.clientX,
-                e.clientY
-            );
-        }
-    );
-
-    window.addEventListener(
+    btn.addEventListener(
         "mouseup",
-        end
+        stop
     );
-}
 
-// ==========================================
-// 十字キー
-// ==========================================
-function initDpad() {
+    btn.addEventListener(
+        "mouseleave",
+        stop
+    );
 
-    const buttons =
-        document.querySelectorAll(
-            ".dpad-btn"
-        );
 
-    buttons.forEach((btn) => {
+    // =========================
+    // タッチ
+    // =========================
 
-        const dir =
-            btn.dataset.dir;
-
-        function press(e) {
+    btn.addEventListener(
+        "touchstart",
+        e=>{
 
             e.preventDefault();
 
-            setDirection(dir);
-        }
+            start();
+        },
+        {passive:false}
+    );
 
-        function release(e) {
+    btn.addEventListener(
+        "touchend",
+        stop
+    );
+});
 
-            e.preventDefault();
 
-            setDirection("STOP");
-        }
+// ============================================
+// ボタン
+// ============================================
 
-        btn.addEventListener(
-            "touchstart",
-            press
+connectBtn.onclick =
+connectBLE;
+
+disconnectBtn.onclick =
+disconnectBLE;
+
+
+// ============================================
+// 初期UI
+// ============================================
+
+updateConnectionUI(false);
+
+updateSpeedUI(2);
+
+
+// ============================================
+// PWA Service Worker
+// ============================================
+
+if("serviceWorker" in navigator){
+
+    navigator.serviceWorker
+    .register("./sw.js")
+    .then(()=>{
+
+        console.log(
+            "ServiceWorker Registered"
         );
 
-        btn.addEventListener(
-            "mousedown",
-            press
-        );
+    })
+    .catch(err=>{
 
-        btn.addEventListener(
-            "touchend",
-            release
-        );
-
-        btn.addEventListener(
-            "mouseup",
-            release
-        );
+        console.log(err);
     });
 }
-
-// ==========================================
-// Toast
-// ==========================================
-function showToast(message) {
-
-    const toast =
-        document.createElement(
-            "div"
-        );
-
-    toast.textContent =
-        message;
-
-    toast.style.position =
-        "fixed";
-
-    toast.style.bottom =
-        "100px";
-
-    toast.style.left =
-        "50%";
-
-    toast.style.transform =
-        "translateX(-50%)";
-
-    toast.style.background =
-        "rgba(0,0,0,0.8)";
-
-    toast.style.color =
-        "white";
-
-    toast.style.padding =
-        "10px 18px";
-
-    toast.style.borderRadius =
-        "20px";
-
-    toast.style.zIndex =
-        "9999";
-
-    document.body.appendChild(
-        toast
-    );
-
-    setTimeout(() => {
-
-        toast.remove();
-
-    }, 2000);
-}
-
-// ==========================================
-// 初期化
-// ==========================================
-function init() {
-
-    // Bluetooth
-    document
-        .getElementById(
-            "connectBtn"
-        )
-        .addEventListener(
-            "click",
-            connectBluetooth
-        );
-
-    document
-        .getElementById(
-            "disconnectBtn"
-        )
-        .addEventListener(
-            "click",
-            disconnectBluetooth
-        );
-
-    // speed
-    document
-        .getElementById(
-            "speedSlider"
-        )
-        .addEventListener(
-            "input",
-            (e) => {
-
-                setSpeed(
-                    parseInt(
-                        e.target.value
-                    )
-                );
-            }
-        );
-
-    // camera
-    document
-        .getElementById(
-            "startCamera"
-        )
-        .addEventListener(
-            "click",
-            startCamera
-        );
-
-    // joystick
-    initJoystick();
-
-    // dpad
-    initDpad();
-
-    console.log(
-        "初期化完了"
-    );
-}
-
-// ==========================================
-// 起動
-// ==========================================
-window.addEventListener(
-    "DOMContentLoaded",
-    init
-);
