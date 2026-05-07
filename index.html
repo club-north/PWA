@@ -113,6 +113,17 @@
             box-shadow: 0 0 10px #33ff33;
         }
 
+        .led.connecting {
+            background: #ffaa00;
+            box-shadow: 0 0 10px #ffaa00;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
         .status-text {
             color: white;
             font-weight: 600;
@@ -252,6 +263,30 @@
             background: rgba(0,0,0,0.5);
             padding: 8px;
             border-radius: 8px;
+            word-break: break-all;
+        }
+
+        /* トースト通知 */
+        .toast {
+            position: fixed;
+            bottom: 100px;
+            left: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.9);
+            color: white;
+            padding: 12px;
+            border-radius: 12px;
+            text-align: center;
+            z-index: 100;
+            animation: fadeInOut 2s ease;
+            pointer-events: none;
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(20px); }
+            15% { opacity: 1; transform: translateY(0); }
+            85% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-20px); }
         }
 
         @media (max-width: 500px) {
@@ -264,29 +299,9 @@
                 max-width: 240px;
             }
         }
-
-        /* オフライン表示 */
-        .offline-badge {
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            background: rgba(0,0,0,0.7);
-            color: #ffaa00;
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 10px;
-            z-index: 100;
-            display: none;
-        }
-
-        .offline-badge.show {
-            display: block;
-        }
     </style>
 </head>
 <body>
-    <div class="offline-badge" id="offlineBadge">📡 オフラインモード</div>
-
     <div class="container">
         <!-- PWAインストールバナー -->
         <div class="install-banner hidden" id="installBanner">
@@ -337,7 +352,7 @@
             ■ または 緊急停止ボタンですべての動作を停止
         </div>
 
-        <div class="debug" id="debugInfo">⚡ 準備完了</div>
+        <div class="debug" id="debugInfo">⚡ 準備完了<br>接続ボタンを押してください</div>
     </div>
 
     <script>
@@ -364,16 +379,6 @@
             }
         });
 
-        // オフライン検出
-        window.addEventListener('online', () => {
-            document.getElementById('offlineBadge').classList.remove('show');
-            debugLog('✅ オンライン復帰');
-        });
-        window.addEventListener('offline', () => {
-            document.getElementById('offlineBadge').classList.add('show');
-            debugLog('⚠️ オフラインになりました', true);
-        });
-
         // ==========================================
         // micro:bit BLE設定
         // ==========================================
@@ -384,6 +389,7 @@
         let server = null;
         let writeCharacteristic = null;
         let connected = false;
+        let isConnecting = false;
         
         const statusLed = document.getElementById("statusLed");
         const statusText = document.getElementById("statusText");
@@ -395,29 +401,42 @@
         let queue = [];
         let sending = false;
         
+        // トースト表示
+        function showToast(message, isError = false) {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.textContent = message;
+            toast.style.background = isError ? 'rgba(196,30,58,0.95)' : 'rgba(0,168,107,0.95)';
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2000);
+        }
+        
         function debugLog(msg, isError = false) {
             const timestamp = new Date().toLocaleTimeString();
             const logMsg = `[${timestamp}] ${msg}`;
             console.log(logMsg);
             if (debugInfo) {
-                debugInfo.innerHTML = logMsg;
-                debugInfo.style.color = isError ? '#ff8888' : '#88ff88';
-                setTimeout(() => {
-                    if (debugInfo.innerHTML === logMsg) {
-                        debugInfo.style.color = '#888888';
-                    }
-                }, 2000);
+                const lines = debugInfo.innerHTML.split('<br>');
+                lines.unshift(logMsg);
+                if (lines.length > 6) lines.pop();
+                debugInfo.innerHTML = lines.join('<br>');
+                const lastLine = debugInfo.querySelector('div');
             }
         }
         
-        function updateUI(state) {
-            if (state) {
-                statusLed.classList.add("connected");
+        function updateUI(state, connecting = false) {
+            if (connecting) {
+                statusLed.className = 'led connecting';
+                statusText.textContent = "接続中...";
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = true;
+            } else if (state) {
+                statusLed.className = 'led connected';
                 statusText.textContent = "接続中";
                 connectBtn.disabled = true;
                 disconnectBtn.disabled = false;
             } else {
-                statusLed.classList.remove("connected");
+                statusLed.className = 'led';
                 statusText.textContent = "未接続";
                 connectBtn.disabled = false;
                 disconnectBtn.disabled = true;
@@ -430,7 +449,6 @@
                 await writeCharacteristic.writeValue(data);
                 return true;
             } catch (e) {
-                debugLog(`送信エラー: ${e.message}`, true);
                 return false;
             }
         }
@@ -448,9 +466,7 @@
                 const encoder = new TextEncoder();
                 const data = encoder.encode(cmd);
                 await writeToMicrobit(data);
-            } catch (e) {
-                debugLog(`エラー: ${e.message}`, true);
-            }
+            } catch (e) {}
             sending = false;
             setTimeout(processQueue, 50);
         }
@@ -463,38 +479,68 @@
         
         function emergencyStop() {
             if (!connected) return;
-            debugLog("🛑 緊急停止実行");
+            debugLog("🛑 緊急停止");
             sendCommand("up");
             sendCommand("down");
             sendCommand("left");
             sendCommand("right");
+            showToast("🛑 緊急停止しました");
         }
         
         async function connectBLE() {
-            if (connected) return;
+            if (connected || isConnecting) return;
+            
             if (!navigator.bluetooth) {
-                alert("ChromeまたはEdgeを使用してください");
+                const msg = "⚠️ Web Bluetooth未対応\nChromeまたはEdgeを使用してください";
+                debugLog(msg, true);
+                showToast(msg, true);
                 return;
             }
+            
+            isConnecting = true;
+            updateUI(false, true);
+            debugLog("🔍 micro:bit検索中...");
+            debugLog("💡 デバイス選択ダイアログが表示されます");
+            showToast("🔍 micro:bitを選択してください");
+            
             try {
-                debugLog("🔍 micro:bit検索中...");
                 device = await navigator.bluetooth.requestDevice({
-                    filters: [{ namePrefix: "micro:bit" }],
+                    filters: [
+                        { namePrefix: "micro:bit" },
+                        { namePrefix: "BBC" }
+                    ],
                     optionalServices: [UART_SERVICE]
                 });
+                
                 debugLog(`✅ 選択: ${device.name || "micro:bit"}`);
+                showToast(`✅ ${device.name || "micro:bit"} に接続中...`);
+                
                 device.addEventListener("gattserverdisconnected", () => {
                     debugLog("🔌 Bluetooth切断", true);
                     connected = false;
                     writeCharacteristic = null;
                     updateUI(false);
                     queue = [];
+                    showToast("🔌 切断されました", true);
                 });
+                
+                debugLog("🔗 GATT接続中...");
                 server = await device.gatt.connect();
+                debugLog("✅ GATT接続完了");
+                
+                debugLog("📡 UARTサービス取得中...");
                 const service = await server.getPrimaryService(UART_SERVICE);
+                debugLog("✅ サービス取得完了");
+                
+                debugLog("✍️ RX Characteristic取得中...");
                 writeCharacteristic = await service.getCharacteristic(RX_CHARACTERISTIC);
+                debugLog("✅ Characteristic取得完了");
+                
                 connected = true;
+                isConnecting = false;
                 updateUI(true);
+                showToast("🎉 micro:bitに接続しました！");
+                
                 setTimeout(() => {
                     if (connected) {
                         emergencyStop();
@@ -508,17 +554,30 @@
                         debugLog("🎮 操作可能です");
                     }
                 }, 500);
+                
             } catch (err) {
-                debugLog(`❌ 接続エラー: ${err.message}`, true);
-                alert(`接続エラー: ${err.message}`);
+                isConnecting = false;
+                
+                // ユーザーキャンセルはエラーとして扱わない
+                if (err.message.includes("cancel") || err.message.includes("User cancelled")) {
+                    debugLog("ℹ️ デバイス選択がキャンセルされました");
+                    showToast("ℹ️ キャンセルしました。もう一度お試しください");
+                    updateUI(false);
+                } else {
+                    debugLog(`❌ 接続エラー: ${err.message}`, true);
+                    showToast(`❌ 接続エラー: ${err.message}`, true);
+                    updateUI(false);
+                }
                 connected = false;
                 writeCharacteristic = null;
-                updateUI(false);
             }
         }
         
         function disconnectBLE() {
-            if (device && device.gatt?.connected) device.gatt.disconnect();
+            if (device && device.gatt && device.gatt.connected) {
+                device.gatt.disconnect();
+                showToast("🔌 切断しました");
+            }
             connected = false;
             writeCharacteristic = null;
             updateUI(false);
@@ -590,10 +649,10 @@
         
         updateUI(false);
         debugLog("✅ F1 Controller PWA起動");
+        debugLog("📌 接続ボタン → micro:bitを選択");
         
         if (!navigator.bluetooth) {
-            debugLog("❌ Web Bluetooth未対応", true);
-            alert("ChromeまたはEdgeを使用してください");
+            debugLog("❌ Web Bluetooth未対応 - Chrome/Edgeが必要", true);
         }
     </script>
 </body>
