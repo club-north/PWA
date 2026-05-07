@@ -1,7 +1,7 @@
 
 // =====================================
-// micro:bit FPV Car PWA（安定版）
-// GATTエラー対策済み
+// micro:bit FPV Car PWA（完全互換版）
+// LoFi Control互換 / 安定通信版
 // =====================================
 
 
@@ -33,10 +33,10 @@ const disconnectBtn = document.getElementById("disconnectBtn");
 
 
 // ===============================
-// 🔥送信キュー制御（重要）
+// 送信キュー（安定化）
 // ===============================
 
-let sendQueue = [];
+let queue = [];
 let sending = false;
 
 
@@ -93,7 +93,6 @@ function disconnectBLE(){
 }
 
 function onDisconnected(){
-
     connected = false;
     updateUI(false);
 }
@@ -101,14 +100,11 @@ function onDisconnected(){
 function updateUI(state){
 
     if(state){
-
         statusLed.style.background = "lime";
         statusText.textContent = "接続中";
         connectBtn.disabled = true;
         disconnectBtn.disabled = false;
-
     }else{
-
         statusLed.style.background = "red";
         statusText.textContent = "未接続";
         connectBtn.disabled = false;
@@ -118,39 +114,40 @@ function updateUI(state){
 
 
 // ===============================
-// 🔥送信（完全安定版キュー）
+// 🔥送信（改行付き + キュー制御）
 // ===============================
 
 function send(cmd){
 
     if(!tx || !connected) return;
 
-    sendQueue.push(cmd);
+    queue.push(cmd + "\n"); // ★ここ重要（micro:bit互換）
+
     processQueue();
 }
 
 
 // ===============================
-// キュー処理（1個ずつ送る）
+// 1個ずつ送信
 // ===============================
 
 async function processQueue(){
 
     if(sending) return;
-    if(sendQueue.length === 0) return;
+    if(queue.length === 0) return;
 
     sending = true;
 
-    const cmd = sendQueue.shift();
+    const cmd = queue.shift();
 
     try{
 
         const data =
         new TextEncoder().encode(cmd);
 
-        await tx.writeValue(data);
+        await tx.writeValueWithoutResponse(data);
 
-        console.log("SEND:", cmd);
+        console.log("SEND:", cmd.trim());
 
     }catch(e){
         console.log("SEND ERROR", e);
@@ -158,12 +155,12 @@ async function processQueue(){
 
     sending = false;
 
-    setTimeout(processQueue, 20);
+    setTimeout(processQueue, 30);
 }
 
 
 // ===============================
-// D-PAD制御
+// 十字キー
 // ===============================
 
 function bindPad(dir, press, release){
@@ -174,7 +171,6 @@ function bindPad(dir, press, release){
     if(!btn) return;
 
     let timer;
-
 
     const start = ()=>{
 
@@ -189,14 +185,12 @@ function bindPad(dir, press, release){
         }, 200);
     };
 
-
     const stop = ()=>{
 
         clearInterval(timer);
 
         send(release);
     };
-
 
     btn.addEventListener("mousedown", start);
     btn.addEventListener("mouseup", stop);
@@ -212,7 +206,7 @@ function bindPad(dir, press, release){
 
 
 // ===============================
-// micro:bit完全一致コマンド
+// コマンド（完全一致）
 // ===============================
 
 bindPad("UP", "UP", "up");
@@ -222,7 +216,7 @@ bindPad("RIGHT", "RIGHT", "right");
 
 
 // ===============================
-// STOPボタン
+// STOP
 // ===============================
 
 document
@@ -240,8 +234,10 @@ document
 // SPEED（c00〜c15）
 // ===============================
 
-document
-.getElementById("speedSlider")
+let speedTimer = null;
+let lastCmd = "";
+
+document.getElementById("speedSlider")
 .addEventListener("input", e=>{
 
     const v = parseInt(e.target.value);
@@ -254,34 +250,21 @@ document
     else if(v === 3) mapped = 12;
     else mapped = 15;
 
-    send("c" + String(mapped).padStart(2,"0"));
+    const cmd = "c" + String(mapped).padStart(2,"0");
+
+    if(cmd === lastCmd) return;
+
+    lastCmd = cmd;
+
+    if(speedTimer){
+        clearTimeout(speedTimer);
+    }
+
+    speedTimer = setTimeout(()=>{
+        send(cmd);
+    }, 120);
 
     document.getElementById("speedValue").textContent = v;
-});
-
-
-// ===============================
-// TRIM UI（未送信）
-// ===============================
-
-document.getElementById("leftTrim")
-.addEventListener("input", e=>{
-    document.getElementById("leftTrimVal").textContent = e.target.value;
-});
-
-document.getElementById("rightTrim")
-.addEventListener("input", e=>{
-    document.getElementById("rightTrimVal").textContent = e.target.value;
-});
-
-document.getElementById("resetTrim")
-.addEventListener("click", ()=>{
-
-    document.getElementById("leftTrim").value = 8;
-    document.getElementById("rightTrim").value = 0;
-
-    document.getElementById("leftTrimVal").textContent = 8;
-    document.getElementById("rightTrimVal").textContent = 0;
 });
 
 
