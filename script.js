@@ -1,18 +1,19 @@
 // ==========================================
 // micro:bit FPVカー PWA
-// Android Chrome 最終安定版
+// LOFI Control互換 安定版
 // script.js
 // ==========================================
 
-console.log(
-    "SCRIPT VERSION 2026"
-);
+console.log("SCRIPT VERSION LOFI FIX");
 
 // ==========================================
 // グローバル
 // ==========================================
 let device = null;
+let server = null;
+let service = null;
 let characteristic = null;
+
 let connected = false;
 
 let currentDirection = "STOP";
@@ -21,13 +22,18 @@ let currentSpeed = 2;
 let videoStream = null;
 
 // ==========================================
-// micro:bit BLE UART UUID
+// Nordic UART Service UUID
 // ==========================================
 const SERVICE_UUID =
     "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
 
+// micro:bitへ送信（WRITE）
 const RX_CHARACTERISTIC_UUID =
     "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+
+// micro:bitから受信（NOTIFY）
+const TX_CHARACTERISTIC_UUID =
+    "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
 
 // ==========================================
 // Bluetooth接続
@@ -36,20 +42,18 @@ async function connectBluetooth() {
 
     try {
 
-        console.log(
-            "Bluetooth検索開始"
-        );
+        console.log("Bluetooth検索開始");
 
         // ==================================
         // micro:bit検索
-        // Android Chrome 安定版
         // ==================================
         device =
             await navigator.bluetooth.requestDevice({
 
                 filters: [
                     {
-                        namePrefix: "BBC"
+                        namePrefix:
+                            "BBC micro:bit"
                     }
                 ],
 
@@ -59,34 +63,30 @@ async function connectBluetooth() {
             });
 
         console.log(
-            "device:",
+            "device取得:",
             device.name
         );
 
         // ==================================
         // GATT接続
         // ==================================
-        const server =
+        server =
             await device.gatt.connect();
 
-        console.log(
-            "GATT接続成功"
-        );
+        console.log("GATT接続");
 
         // ==================================
         // UART Service取得
         // ==================================
-        const service =
+        service =
             await server.getPrimaryService(
                 SERVICE_UUID
             );
 
-        console.log(
-            "UART Service OK"
-        );
+        console.log("service取得");
 
         // ==================================
-        // RX characteristic取得
+        // WRITE characteristic取得
         // ==================================
         characteristic =
             await service.getCharacteristic(
@@ -94,11 +94,10 @@ async function connectBluetooth() {
             );
 
         console.log(
-            "Characteristic OK"
+            "characteristic取得"
         );
 
         console.log(
-            "properties:",
             characteristic.properties
         );
 
@@ -135,7 +134,7 @@ async function connectBluetooth() {
     } catch(error) {
 
         console.error(
-            "接続失敗:",
+            "BLE接続失敗:",
             error
         );
 
@@ -155,9 +154,7 @@ function onDisconnected() {
 
     updateConnectionStatus(false);
 
-    console.log(
-        "BLE切断"
-    );
+    console.log("BLE切断");
 
     showToast(
         "切断されました"
@@ -181,6 +178,7 @@ function disconnectBluetooth() {
 
 // ==========================================
 // UART送信
+// writeValue版
 // ==========================================
 async function sendCommand(command) {
 
@@ -193,22 +191,18 @@ async function sendCommand(command) {
         const encoder =
             new TextEncoder();
 
-        // ==================================
         // 改行付き
-        // 超重要
-        // ==================================
         const data =
             encoder.encode(
                 command + "\n"
             );
 
         // ==================================
-        // Android Chrome 安定版
+        // LOFI互換
         // ==================================
-        await characteristic
-            .writeValueWithoutResponse(
-                data
-            );
+        await characteristic.writeValue(
+            data
+        );
 
         console.log(
             "送信:",
@@ -218,7 +212,7 @@ async function sendCommand(command) {
     } catch(error) {
 
         console.error(
-            "送信失敗:",
+            "送信エラー:",
             error
         );
     }
@@ -232,7 +226,7 @@ async function setSpeed(level) {
 
     currentSpeed = level;
 
-    // micro:bit用速度
+    // micro:bit速度変換
     const speedMap = [
         15,
         25,
@@ -388,7 +382,7 @@ async function startCamera() {
                     video: {
                         facingMode: {
                             ideal:
-                            "environment"
+                                "environment"
                         }
                     }
 
@@ -476,7 +470,8 @@ function initJoystick() {
 
         const dist =
             Math.sqrt(
-                dx*dx + dy*dy
+                dx * dx +
+                dy * dy
             );
 
         if (dist > max) {
