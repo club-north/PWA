@@ -1,6 +1,7 @@
+
 // =====================================
-// micro:bit FPV Car PWA (FIXED)
-// micro:bitコード完全一致版
+// micro:bit FPV Car PWA（完全安定版）
+// micro:bit変更不要版
 // =====================================
 
 
@@ -67,7 +68,7 @@ async function connectBLE(){
 
     }catch(e){
         console.log(e);
-        alert("接続失敗");
+        alert("BLE接続失敗");
     }
 }
 
@@ -117,7 +118,7 @@ function updateUI(state){
 
 
 // ===============================
-// SEND（重要：改行禁止）
+// ★重要：完全RAW送信（改行なし）
 // ===============================
 
 async function send(cmd){
@@ -129,7 +130,7 @@ async function send(cmd){
         const data =
         new TextEncoder().encode(cmd);
 
-        await tx.writeValueWithoutResponse(data);
+        await tx.writeValue(data);
 
         console.log("SEND:", cmd);
 
@@ -140,7 +141,7 @@ async function send(cmd){
 
 
 // ===============================
-// D-PAD（micro:bit完全一致）
+// D-PAD（完全一致送信）
 // ===============================
 
 function bindPad(dir, press, release){
@@ -159,7 +160,9 @@ function bindPad(dir, press, release){
         send(press);
 
         timer = setInterval(()=>{
+
             send(press);
+
         }, 120);
     };
 
@@ -186,7 +189,7 @@ function bindPad(dir, press, release){
 
 
 // ===============================
-// micro:bit コマンド完全一致
+// micro:bit完全一致コマンド
 // ===============================
 
 bindPad("UP", "UP", "up");
@@ -195,10 +198,15 @@ bindPad("LEFT", "LEFT", "left");
 bindPad("RIGHT", "RIGHT", "right");
 
 
-// STOP（中央ボタン）
-document.querySelector('[data-dir="STOP"]')
+// ===============================
+// STOPボタン
+// ===============================
+
+document
+.querySelector('[data-dir="STOP"]')
 .addEventListener("click", ()=>{
 
+    // 即停止（micro:bit仕様に合わせる）
     send("up");
     send("down");
     send("left");
@@ -233,23 +241,20 @@ document
 
 
 // ===============================
-// TRIM（UIのみ）
+// TRIM UI（送信なし）
 // ===============================
 
-document
-.getElementById("leftTrim")
+document.getElementById("leftTrim")
 .addEventListener("input", e=>{
     document.getElementById("leftTrimVal").textContent = e.target.value;
 });
 
-document
-.getElementById("rightTrim")
+document.getElementById("rightTrim")
 .addEventListener("input", e=>{
     document.getElementById("rightTrimVal").textContent = e.target.value;
 });
 
-document
-.getElementById("resetTrim")
+document.getElementById("resetTrim")
 .addEventListener("click", ()=>{
 
     document.getElementById("leftTrim").value = 8;
@@ -261,7 +266,7 @@ document
 
 
 // ===============================
-// BUTTONS
+// CONNECT BUTTON
 // ===============================
 
 connectBtn.onclick = connectBLE;
