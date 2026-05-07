@@ -1,161 +1,600 @@
 <!DOCTYPE html>
-<html>
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>micro:bit 接続テスト</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#1a1a2e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="F1 Controller">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon.png">
+    <title>F1 Controller - micro:bit Car</title>
     <style>
+        * {
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: sans-serif;
-            text-align: center;
-            padding: 50px 20px;
-            background: #1a1a2e;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(145deg, #1a1a2e 0%, #0f0f1a 100%);
+            font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, 'Roboto', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            max-width: 500px;
+            width: 100%;
+            padding: 20px;
+        }
+
+        /* インストールバナー */
+        .install-banner {
+            background: linear-gradient(135deg, #00a86b, #008855);
+            border-radius: 60px;
+            padding: 12px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            animation: slideDown 0.5s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                transform: translateY(-100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .install-banner.hidden {
+            display: none;
+        }
+
+        .install-text {
             color: white;
-        }
-        button {
-            background: #00a86b;
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            font-size: 18px;
-            border-radius: 30px;
-            margin: 10px;
-        }
-        pre {
-            background: #0f0f1a;
-            padding: 15px;
-            border-radius: 10px;
-            text-align: left;
-            overflow-x: auto;
-        }
-        .status {
+            font-weight: bold;
             font-size: 14px;
-            margin-top: 20px;
-            padding: 10px;
+        }
+
+        .install-button {
+            background: white;
+            color: #00a86b;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 30px;
+            font-weight: bold;
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        /* ステータスバー */
+        .status-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: rgba(15,15,26,0.95);
+            padding: 12px 20px;
+            border-radius: 60px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .led {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: #ff3333;
+            transition: all 0.2s;
+            box-shadow: 0 0 4px #ff3333;
+        }
+
+        .led.connected {
+            background: #33ff33;
+            box-shadow: 0 0 10px #33ff33;
+        }
+
+        .status-text {
+            color: white;
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        button {
+            background: #2c2c44;
+            border: none;
+            color: white;
+            font-weight: bold;
+            padding: 8px 20px;
+            border-radius: 40px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        button:active {
+            transform: scale(0.96);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .connect-btn { background: #00a86b; }
+        .disconnect-btn { background: #c41e3a; }
+
+        /* スピードコントロール */
+        .speed-panel {
+            background: rgba(10,10,18,0.9);
+            border-radius: 40px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
+            border: 1px solid rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .speed-label {
+            display: flex;
+            justify-content: space-between;
+            color: #ccc;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            -webkit-appearance: none;
+            background: #2c2c44;
             border-radius: 10px;
         }
-        .connected { background: #00a86b; }
-        .error { background: #c41e3a; }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 24px;
+            height: 24px;
+            background: #00a86b;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid white;
+            box-shadow: 0 0 6px #00a86b;
+        }
+
+        /* 十字キー */
+        .dpad {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 16px;
+            max-width: 280px;
+            margin: 0 auto 24px;
+        }
+
+        .pad-btn {
+            background: rgba(30,30,50,0.95);
+            border-radius: 60px;
+            text-align: center;
+            padding: 20px 0;
+            font-size: 36px;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+            transition: 0.05s linear;
+            box-shadow: 0 8px 0 rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.15);
+            touch-action: manipulation;
+            backdrop-filter: blur(10px);
+        }
+
+        .pad-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 4px 0 rgba(0,0,0,0.3);
+        }
+
+        .stop-btn {
+            background: #c41e3a;
+            box-shadow: 0 8px 0 #8b1529;
+        }
+
+        .stop-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 4px 0 #8b1529;
+        }
+
+        /* 緊急停止ボタン */
+        .emergency-btn {
+            width: 100%;
+            background: #ff4444;
+            padding: 14px;
+            font-size: 18px;
+            border-radius: 50px;
+            margin-top: 8px;
+            box-shadow: 0 4px 12px rgba(255,0,0,0.3);
+        }
+
+        .emergency-btn:active {
+            transform: scale(0.98);
+        }
+
+        .info {
+            text-align: center;
+            color: #aaa;
+            font-size: 12px;
+            margin-top: 20px;
+        }
+
+        .debug {
+            font-size: 10px;
+            color: #888;
+            text-align: center;
+            margin-top: 16px;
+            font-family: monospace;
+            background: rgba(0,0,0,0.5);
+            padding: 8px;
+            border-radius: 8px;
+        }
+
+        @media (max-width: 500px) {
+            .pad-btn {
+                padding: 16px 0;
+                font-size: 28px;
+            }
+            .dpad {
+                gap: 12px;
+                max-width: 240px;
+            }
+        }
+
+        /* オフライン表示 */
+        .offline-badge {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            color: #ffaa00;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 10px;
+            z-index: 100;
+            display: none;
+        }
+
+        .offline-badge.show {
+            display: block;
+        }
     </style>
 </head>
 <body>
-    <h1>🔌 micro:bit 接続テスト</h1>
-    <button id="connectBtn">接続する</button>
-    <button id="disconnectBtn" disabled>切断</button>
-    <pre id="log">⚡ 準備完了</pre>
-    <div id="status" class="status"></div>
+    <div class="offline-badge" id="offlineBadge">📡 オフラインモード</div>
+
+    <div class="container">
+        <!-- PWAインストールバナー -->
+        <div class="install-banner hidden" id="installBanner">
+            <div class="install-text">📱 アプリとしてインストール</div>
+            <button class="install-button" id="installBtn">インストール</button>
+        </div>
+
+        <!-- ステータスバー -->
+        <div class="status-bar">
+            <div class="status-indicator">
+                <div class="led" id="statusLed"></div>
+                <span class="status-text" id="statusText">未接続</span>
+            </div>
+            <div>
+                <button id="connectBtn" class="connect-btn">🔌 接続</button>
+                <button id="disconnectBtn" class="disconnect-btn" disabled>切断</button>
+            </div>
+        </div>
+
+        <!-- スピード調整 -->
+        <div class="speed-panel">
+            <div class="speed-label">
+                <span>🐢 スピード</span>
+                <span id="speedValue">2</span>
+                <span>🐇</span>
+            </div>
+            <input type="range" id="speedSlider" min="0" max="4" step="1" value="2">
+        </div>
+
+        <!-- 十字キー -->
+        <div class="dpad">
+            <div></div>
+            <div class="pad-btn" data-dir="UP">▲</div>
+            <div></div>
+            <div class="pad-btn" data-dir="LEFT">◀</div>
+            <div class="pad-btn stop-btn" data-dir="STOP">■</div>
+            <div class="pad-btn" data-dir="RIGHT">▶</div>
+            <div></div>
+            <div class="pad-btn" data-dir="DOWN">▼</div>
+            <div></div>
+        </div>
+
+        <!-- 緊急停止ボタン -->
+        <button id="emergencyStop" class="emergency-btn">🛑 緊急停止</button>
+
+        <div class="info">
+            ⚡ ボタンを押し続けると連続送信<br>
+            ■ または 緊急停止ボタンですべての動作を停止
+        </div>
+
+        <div class="debug" id="debugInfo">⚡ 準備完了</div>
+    </div>
 
     <script>
+        // PWAインストール
+        let deferredPrompt = null;
+        const installBanner = document.getElementById('installBanner');
+        const installBtn = document.getElementById('installBtn');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installBanner.classList.remove('hidden');
+        });
+
+        installBtn.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const result = await deferredPrompt.userChoice;
+                if (result.outcome === 'accepted') {
+                    console.log('PWAインストール承認');
+                }
+                deferredPrompt = null;
+                installBanner.classList.add('hidden');
+            }
+        });
+
+        // オフライン検出
+        window.addEventListener('online', () => {
+            document.getElementById('offlineBadge').classList.remove('show');
+            debugLog('✅ オンライン復帰');
+        });
+        window.addEventListener('offline', () => {
+            document.getElementById('offlineBadge').classList.add('show');
+            debugLog('⚠️ オフラインになりました', true);
+        });
+
+        // ==========================================
+        // micro:bit BLE設定
+        // ==========================================
         const UART_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+        const RX_CHARACTERISTIC = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
         
         let device = null;
         let server = null;
-        let char = null;
+        let writeCharacteristic = null;
         let connected = false;
         
+        const statusLed = document.getElementById("statusLed");
+        const statusText = document.getElementById("statusText");
         const connectBtn = document.getElementById("connectBtn");
         const disconnectBtn = document.getElementById("disconnectBtn");
-        const logDiv = document.getElementById("log");
-        const statusDiv = document.getElementById("status");
+        const emergencyStopBtn = document.getElementById("emergencyStop");
+        const debugInfo = document.getElementById("debugInfo");
         
-        function log(msg, isError = false) {
-            const time = new Date().toLocaleTimeString();
-            const line = `[${time}] ${msg}`;
-            logDiv.innerHTML = line + "\n" + logDiv.innerHTML;
-            statusDiv.textContent = msg;
-            statusDiv.className = isError ? "status error" : "status";
-            console.log(line);
+        let queue = [];
+        let sending = false;
+        
+        function debugLog(msg, isError = false) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logMsg = `[${timestamp}] ${msg}`;
+            console.log(logMsg);
+            if (debugInfo) {
+                debugInfo.innerHTML = logMsg;
+                debugInfo.style.color = isError ? '#ff8888' : '#88ff88';
+                setTimeout(() => {
+                    if (debugInfo.innerHTML === logMsg) {
+                        debugInfo.style.color = '#888888';
+                    }
+                }, 2000);
+            }
         }
         
-        async function connect() {
-            if (connected) return;
-            
-            try {
-                log("🔍 Bluetoothデバイス検索中...");
-                log("💡 デバイス選択ダイアログが開きます");
-                
-                device = await navigator.bluetooth.requestDevice({
-                    acceptAllDevices: true,
-                    optionalServices: [UART_SERVICE]
-                });
-                
-                log(`✅ 選択: ${device.name || "Unknown"}`);
-                
-                device.addEventListener("gattserverdisconnected", () => {
-                    log("🔌 切断されました", true);
-                    connected = false;
-                    char = null;
-                    connectBtn.disabled = false;
-                    disconnectBtn.disabled = true;
-                });
-                
-                log("🔗 GATT接続中...");
-                server = await device.gatt.connect();
-                log("✅ GATT接続完了");
-                
-                log("📡 サービス取得中...");
-                const service = await server.getPrimaryService(UART_SERVICE);
-                log("✅ サービス取得完了");
-                
-                log("✍️ Characteristic取得中...");
-                const chars = await service.getCharacteristics();
-                log(`📊 ${chars.length}個のCharacteristic`);
-                
-                for (const c of chars) {
-                    log(`  ${c.uuid}: write=${c.properties.write}`);
-                    if (c.properties.write || c.properties.writeWithoutResponse) {
-                        char = c;
-                        log(`✅ 書き込みChar選択: ${c.uuid}`);
-                        break;
-                    }
-                }
-                
-                if (!char) {
-                    throw new Error("書き込み不可");
-                }
-                
-                // テスト送信
-                const testData = new TextEncoder().encode("UP\n");
-                await char.writeValue(testData);
-                log("✅ テスト送信成功！");
-                
-                connected = true;
+        function updateUI(state) {
+            if (state) {
+                statusLed.classList.add("connected");
+                statusText.textContent = "接続中";
                 connectBtn.disabled = true;
                 disconnectBtn.disabled = false;
-                log("🎉 接続完了！micro:bitのLEDが変わります");
-                
+            } else {
+                statusLed.classList.remove("connected");
+                statusText.textContent = "未接続";
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+            }
+        }
+        
+        async function writeToMicrobit(data) {
+            if (!writeCharacteristic || !connected) return false;
+            try {
+                await writeCharacteristic.writeValue(data);
+                return true;
+            } catch (e) {
+                debugLog(`送信エラー: ${e.message}`, true);
+                return false;
+            }
+        }
+        
+        async function processQueue() {
+            if (sending) return;
+            if (queue.length === 0) return;
+            if (!connected || !writeCharacteristic) {
+                queue = [];
+                return;
+            }
+            sending = true;
+            const cmd = queue.shift();
+            try {
+                const encoder = new TextEncoder();
+                const data = encoder.encode(cmd);
+                await writeToMicrobit(data);
+            } catch (e) {
+                debugLog(`エラー: ${e.message}`, true);
+            }
+            sending = false;
+            setTimeout(processQueue, 50);
+        }
+        
+        function sendCommand(cmd) {
+            if (!connected || !writeCharacteristic) return;
+            queue.push(cmd + "\n");
+            processQueue();
+        }
+        
+        function emergencyStop() {
+            if (!connected) return;
+            debugLog("🛑 緊急停止実行");
+            sendCommand("up");
+            sendCommand("down");
+            sendCommand("left");
+            sendCommand("right");
+        }
+        
+        async function connectBLE() {
+            if (connected) return;
+            if (!navigator.bluetooth) {
+                alert("ChromeまたはEdgeを使用してください");
+                return;
+            }
+            try {
+                debugLog("🔍 micro:bit検索中...");
+                device = await navigator.bluetooth.requestDevice({
+                    filters: [{ namePrefix: "micro:bit" }],
+                    optionalServices: [UART_SERVICE]
+                });
+                debugLog(`✅ 選択: ${device.name || "micro:bit"}`);
+                device.addEventListener("gattserverdisconnected", () => {
+                    debugLog("🔌 Bluetooth切断", true);
+                    connected = false;
+                    writeCharacteristic = null;
+                    updateUI(false);
+                    queue = [];
+                });
+                server = await device.gatt.connect();
+                const service = await server.getPrimaryService(UART_SERVICE);
+                writeCharacteristic = await service.getCharacteristic(RX_CHARACTERISTIC);
+                connected = true;
+                updateUI(true);
+                setTimeout(() => {
+                    if (connected) {
+                        emergencyStop();
+                        const speedSlider = document.getElementById("speedSlider");
+                        if (speedSlider) {
+                            const val = parseInt(speedSlider.value);
+                            const table = [0, 4, 8, 12, 15];
+                            const mapped = table[val];
+                            sendCommand("c" + String(mapped).padStart(2, "0"));
+                        }
+                        debugLog("🎮 操作可能です");
+                    }
+                }, 500);
             } catch (err) {
-                if (err.message.includes("cancel") || err.message.includes("User cancelled")) {
-                    log("⚠️ キャンセルされました。micro:bitが見つかりませんでした", true);
-                    log("💡 micro:bitをペアリングモードで起動してください", true);
-                } else {
-                    log(`❌ エラー: ${err.message}`, true);
-                }
+                debugLog(`❌ 接続エラー: ${err.message}`, true);
+                alert(`接続エラー: ${err.message}`);
                 connected = false;
-                char = null;
+                writeCharacteristic = null;
+                updateUI(false);
             }
         }
         
-        function disconnect() {
-            if (device && device.gatt?.connected) {
-                device.gatt.disconnect();
-            }
+        function disconnectBLE() {
+            if (device && device.gatt?.connected) device.gatt.disconnect();
             connected = false;
-            char = null;
-            connectBtn.disabled = false;
-            disconnectBtn.disabled = true;
-            log("切断しました");
+            writeCharacteristic = null;
+            updateUI(false);
+            queue = [];
+            debugLog("切断完了");
         }
         
-        connectBtn.onclick = connect;
-        disconnectBtn.onclick = disconnect;
+        function bindPad(dir, pressCmd, releaseCmd) {
+            const btn = document.querySelector(`[data-dir="${dir}"]`);
+            if (!btn) return;
+            let repeatInterval = null;
+            let isPressed = false;
+            function start() {
+                if (!connected || isPressed) return;
+                isPressed = true;
+                sendCommand(pressCmd);
+                repeatInterval = setInterval(() => {
+                    if (connected && isPressed) sendCommand(pressCmd);
+                    else stop();
+                }, 150);
+            }
+            function stop() {
+                if (!isPressed) return;
+                isPressed = false;
+                if (repeatInterval) clearInterval(repeatInterval);
+                if (connected) sendCommand(releaseCmd);
+            }
+            btn.addEventListener("mousedown", start);
+            btn.addEventListener("mouseup", stop);
+            btn.addEventListener("mouseleave", stop);
+            btn.addEventListener("touchstart", start, { passive: false });
+            btn.addEventListener("touchend", stop);
+        }
+        
+        let speedDebounce = null;
+        let lastSpeedCmd = "";
+        
+        function sendSpeed(value) {
+            if (!connected) return;
+            const level = parseInt(value);
+            const table = [0, 4, 8, 12, 15];
+            const mapped = table[level] || 0;
+            const cmd = "c" + String(mapped).padStart(2, "0");
+            if (cmd === lastSpeedCmd) return;
+            lastSpeedCmd = cmd;
+            sendCommand(cmd);
+        }
+        
+        const speedSlider = document.getElementById("speedSlider");
+        const speedValueSpan = document.getElementById("speedValue");
+        if (speedSlider) {
+            speedSlider.addEventListener("input", (e) => {
+                if (speedValueSpan) speedValueSpan.textContent = e.target.value;
+                if (speedDebounce) clearTimeout(speedDebounce);
+                speedDebounce = setTimeout(() => sendSpeed(e.target.value), 100);
+            });
+        }
+        
+        document.querySelector('[data-dir="STOP"]')?.addEventListener("click", () => emergencyStop());
+        emergencyStopBtn?.addEventListener("click", () => emergencyStop());
+        
+        bindPad("UP", "UP", "up");
+        bindPad("DOWN", "DOWN", "down");
+        bindPad("LEFT", "LEFT", "left");
+        bindPad("RIGHT", "RIGHT", "right");
+        
+        connectBtn.onclick = connectBLE;
+        disconnectBtn.onclick = disconnectBLE;
+        
+        updateUI(false);
+        debugLog("✅ F1 Controller PWA起動");
         
         if (!navigator.bluetooth) {
-            log("❌ Web Bluetooth未対応 - Chromeが必要", true);
+            debugLog("❌ Web Bluetooth未対応", true);
+            alert("ChromeまたはEdgeを使用してください");
         }
-        
-        log("📌 接続ボタンを押してください");
-        log("💡 micro:bitをペアリングモードで起動すると見つかりやすい");
     </script>
 </body>
 </html>
