@@ -1,7 +1,7 @@
 
 // =====================================
-// micro:bit FPV Car PWA（完全安定版）
-// micro:bit変更不要版
+// micro:bit FPV Car PWA（安定版）
+// GATTエラー対策済み
 // =====================================
 
 
@@ -30,6 +30,14 @@ const statusLed = document.getElementById("statusLed");
 const statusText = document.getElementById("statusText");
 const connectBtn = document.getElementById("connectBtn");
 const disconnectBtn = document.getElementById("disconnectBtn");
+
+
+// ===============================
+// 🔥送信キュー制御（重要）
+// ===============================
+
+let sendQueue = [];
+let sending = false;
 
 
 // ===============================
@@ -84,18 +92,10 @@ function disconnectBLE(){
     }
 }
 
-
-// ===============================
-// STATUS
-// ===============================
-
 function onDisconnected(){
 
     connected = false;
-
     updateUI(false);
-
-    console.log("DISCONNECTED");
 }
 
 function updateUI(state){
@@ -118,12 +118,30 @@ function updateUI(state){
 
 
 // ===============================
-// ★重要：完全RAW送信（改行なし）
+// 🔥送信（完全安定版キュー）
 // ===============================
 
-async function send(cmd){
+function send(cmd){
 
     if(!tx || !connected) return;
+
+    sendQueue.push(cmd);
+    processQueue();
+}
+
+
+// ===============================
+// キュー処理（1個ずつ送る）
+// ===============================
+
+async function processQueue(){
+
+    if(sending) return;
+    if(sendQueue.length === 0) return;
+
+    sending = true;
+
+    const cmd = sendQueue.shift();
 
     try{
 
@@ -137,16 +155,21 @@ async function send(cmd){
     }catch(e){
         console.log("SEND ERROR", e);
     }
+
+    sending = false;
+
+    setTimeout(processQueue, 20);
 }
 
 
 // ===============================
-// D-PAD（完全一致送信）
+// D-PAD制御
 // ===============================
 
 function bindPad(dir, press, release){
 
-    const btn = document.querySelector(`[data-dir="${dir}"]`);
+    const btn =
+    document.querySelector(`[data-dir="${dir}"]`);
 
     if(!btn) return;
 
@@ -163,7 +186,7 @@ function bindPad(dir, press, release){
 
             send(press);
 
-        }, 120);
+        }, 200);
     };
 
 
@@ -206,7 +229,6 @@ document
 .querySelector('[data-dir="STOP"]')
 .addEventListener("click", ()=>{
 
-    // 即停止（micro:bit仕様に合わせる）
     send("up");
     send("down");
     send("left");
@@ -232,16 +254,14 @@ document
     else if(v === 3) mapped = 12;
     else mapped = 15;
 
-    const cmd = "c" + String(mapped).padStart(2,"0");
-
-    send(cmd);
+    send("c" + String(mapped).padStart(2,"0"));
 
     document.getElementById("speedValue").textContent = v;
 });
 
 
 // ===============================
-// TRIM UI（送信なし）
+// TRIM UI（未送信）
 // ===============================
 
 document.getElementById("leftTrim")
@@ -266,7 +286,7 @@ document.getElementById("resetTrim")
 
 
 // ===============================
-// CONNECT BUTTON
+// BUTTON
 // ===============================
 
 connectBtn.onclick = connectBLE;
