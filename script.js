@@ -1,10 +1,4 @@
 
-// =====================================
-// micro:bit FPV Car PWA（完全互換版）
-// LoFi Control互換 / 安定通信版
-// =====================================
-
-
 // ===============================
 // BLE UUID
 // ===============================
@@ -33,7 +27,7 @@ const disconnectBtn = document.getElementById("disconnectBtn");
 
 
 // ===============================
-// 送信キュー（安定化）
+// 状態管理
 // ===============================
 
 let queue = [];
@@ -57,10 +51,10 @@ async function connectBLE(){
             optionalServices:[UART_SERVICE]
         });
 
-        device.addEventListener(
-            "gattserverdisconnected",
-            onDisconnected
-        );
+        device.addEventListener("gattserverdisconnected", ()=>{
+            connected = false;
+            updateUI(false);
+        });
 
         server = await device.gatt.connect();
 
@@ -92,10 +86,10 @@ function disconnectBLE(){
     }
 }
 
-function onDisconnected(){
-    connected = false;
-    updateUI(false);
-}
+
+// ===============================
+// UI
+// ===============================
 
 function updateUI(state){
 
@@ -114,21 +108,21 @@ function updateUI(state){
 
 
 // ===============================
-// 🔥送信（改行付き + キュー制御）
+// 🔥送信（安定版）
 // ===============================
 
 function send(cmd){
 
     if(!tx || !connected) return;
 
-    queue.push(cmd + "\n"); // ★ここ重要（micro:bit互換）
+    queue.push(cmd + "\n");
 
     processQueue();
 }
 
 
 // ===============================
-// 1個ずつ送信
+// 直列送信（完全安定）
 // ===============================
 
 async function processQueue(){
@@ -145,7 +139,7 @@ async function processQueue(){
         const data =
         new TextEncoder().encode(cmd);
 
-        await tx.writeValueWithoutResponse(data);
+        await tx.writeValue(data);
 
         console.log("SEND:", cmd.trim());
 
@@ -179,9 +173,7 @@ function bindPad(dir, press, release){
         send(press);
 
         timer = setInterval(()=>{
-
             send(press);
-
         }, 200);
     };
 
@@ -206,7 +198,7 @@ function bindPad(dir, press, release){
 
 
 // ===============================
-// コマンド（完全一致）
+// コマンド完全一致
 // ===============================
 
 bindPad("UP", "UP", "up");
@@ -231,11 +223,11 @@ document
 
 
 // ===============================
-// SPEED（c00〜c15）
+// SPEED（安定版）
 // ===============================
 
+let lastSpeed = "";
 let speedTimer = null;
-let lastCmd = "";
 
 document.getElementById("speedSlider")
 .addEventListener("input", e=>{
@@ -252,16 +244,16 @@ document.getElementById("speedSlider")
 
     const cmd = "c" + String(mapped).padStart(2,"0");
 
-    if(cmd === lastCmd) return;
+    if(cmd === lastSpeed) return;
 
-    lastCmd = cmd;
+    lastSpeed = cmd;
 
-    if(speedTimer){
-        clearTimeout(speedTimer);
-    }
+    if(speedTimer) clearTimeout(speedTimer);
 
     speedTimer = setTimeout(()=>{
+
         send(cmd);
+
     }, 120);
 
     document.getElementById("speedValue").textContent = v;
