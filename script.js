@@ -1,6 +1,6 @@
 // ==========================================
 // micro:bit FPVカー PWA
-// 最終安定版 script.js
+// 完全修正版 script.js
 // ==========================================
 
 // ==========================================
@@ -21,10 +21,6 @@ let videoStream = null;
 const SERVICE_UUID =
     "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
 
-// RX(write)
-const RX_CHARACTERISTIC_UUID =
-    "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
-
 // ==========================================
 // Bluetooth接続
 // ==========================================
@@ -33,12 +29,18 @@ async function connectBluetooth() {
     try {
 
         // ==================================
-        // デバイス選択
+        // デバイス取得
         // ==================================
         device =
             await navigator.bluetooth.requestDevice({
 
-                acceptAllDevices: true,
+                filters: [
+                    {
+                        services: [
+                            SERVICE_UUID
+                        ]
+                    }
+                ],
 
                 optionalServices: [
                     SERVICE_UUID
@@ -60,7 +62,7 @@ async function connectBluetooth() {
         );
 
         // ==================================
-        // Service取得
+        // service取得
         // ==================================
         const service =
             await server.getPrimaryService(
@@ -72,20 +74,57 @@ async function connectBluetooth() {
         );
 
         // ==================================
-        // RX characteristic取得
+        // characteristic一覧取得
         // ==================================
-        characteristic =
-            await service.getCharacteristic(
-                RX_CHARACTERISTIC_UUID
+        const characteristics =
+            await service.getCharacteristics();
+
+        console.log(
+            "characteristics一覧:",
+            characteristics
+        );
+
+        // ==================================
+        // write可能 characteristic 探索
+        // ==================================
+        characteristic = null;
+
+        for (const c of characteristics) {
+
+            console.log(
+                "UUID:",
+                c.uuid
             );
 
-        console.log(
-            "RX characteristic取得"
-        );
+            console.log(
+                "properties:",
+                c.properties
+            );
 
-        console.log(
-            characteristic
-        );
+            // write対応のみ採用
+            if (
+                c.properties.write
+            ) {
+
+                characteristic = c;
+
+                console.log(
+                    "WRITE characteristic発見"
+                );
+
+                break;
+            }
+        }
+
+        // ==================================
+        // 見つからない場合
+        // ==================================
+        if (!characteristic) {
+
+            throw new Error(
+                "write characteristicなし"
+            );
+        }
 
         // ==================================
         // 接続成功
@@ -94,12 +133,12 @@ async function connectBluetooth() {
 
         updateConnectionStatus(true);
 
-        showToast(
-            "Bluetooth接続成功"
-        );
-
         console.log(
             "BLE接続成功"
+        );
+
+        showToast(
+            "Bluetooth接続成功"
         );
 
         // ==================================
@@ -111,9 +150,11 @@ async function connectBluetooth() {
         );
 
         // ==================================
-        // 初期速度
+        // 初期速度送信
         // ==================================
-        setSpeed(currentSpeed);
+        await setSpeed(
+            currentSpeed
+        );
 
     } catch(error) {
 
@@ -123,7 +164,7 @@ async function connectBluetooth() {
         );
 
         showToast(
-            "Bluetooth接続失敗"
+            "接続失敗"
         );
     }
 }
@@ -163,7 +204,6 @@ function disconnectBluetooth() {
 
 // ==========================================
 // UART送信
-// 改行付き（超重要）
 // ==========================================
 async function sendCommand(command) {
 
@@ -176,13 +216,14 @@ async function sendCommand(command) {
         const encoder =
             new TextEncoder();
 
+        // 改行超重要
         const data =
             encoder.encode(
                 command + "\n"
             );
 
         // ==================================
-        // micro:bit UART送信
+        // write送信
         // ==================================
         await characteristic.writeValue(
             data
@@ -214,7 +255,7 @@ async function setSpeed(level) {
 
     currentSpeed = level;
 
-    // micro:bit側 speed
+    // micro:bit側速度
     const speedMap = [
         15,
         25,
@@ -226,10 +267,13 @@ async function setSpeed(level) {
     const realSpeed =
         speedMap[level];
 
+    // SPD形式
     const command =
         `SPD:${realSpeed}`;
 
-    await sendCommand(command);
+    await sendCommand(
+        command
+    );
 
     // UI更新
     document.getElementById(
@@ -287,11 +331,18 @@ async function setDirection(direction) {
             command = "S";
     }
 
-    await sendCommand(command);
+    console.log(
+        "方向:",
+        command
+    );
+
+    await sendCommand(
+        command
+    );
 }
 
 // ==========================================
-// 接続状態表示
+// 接続状態UI
 // ==========================================
 function updateConnectionStatus(
     isConnected
@@ -353,7 +404,8 @@ async function startCamera() {
     try {
 
         videoStream =
-            await navigator.mediaDevices
+            await navigator
+                .mediaDevices
                 .getUserMedia({
 
                     video: {
@@ -437,8 +489,11 @@ function initJoystick() {
 
         if (!active) return;
 
-        let dx = x - centerX;
-        let dy = y - centerY;
+        let dx =
+            x - centerX;
+
+        let dy =
+            y - centerY;
 
         const max = 60;
 
@@ -680,7 +735,7 @@ function showToast(message) {
 // ==========================================
 function init() {
 
-    // BLE
+    // Bluetooth
     document
         .getElementById(
             "connectBtn"
