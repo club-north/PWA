@@ -1,6 +1,6 @@
 // ==========================================
 // micro:bit FPVカー PWA
-// 完全修正版 script.js
+// 最終安定版 script.js
 // ==========================================
 
 // ==========================================
@@ -16,10 +16,14 @@ let currentSpeed = 2;
 let videoStream = null;
 
 // ==========================================
-// micro:bit UART Service UUID
+// micro:bit BLE UART UUID
 // ==========================================
 const SERVICE_UUID =
     "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+
+// RX(write)
+const RX_CHARACTERISTIC_UUID =
+    "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
 
 // ==========================================
 // Bluetooth接続
@@ -52,7 +56,7 @@ async function connectBluetooth() {
             await device.gatt.connect();
 
         console.log(
-            "GATT connected"
+            "GATT接続"
         );
 
         // ==================================
@@ -68,56 +72,20 @@ async function connectBluetooth() {
         );
 
         // ==================================
-        // characteristic自動探索
+        // RX characteristic取得
         // ==================================
-        const characteristics =
-            await service.getCharacteristics();
+        characteristic =
+            await service.getCharacteristic(
+                RX_CHARACTERISTIC_UUID
+            );
 
         console.log(
-            "characteristics:",
-            characteristics
+            "RX characteristic取得"
         );
 
-        for (const c of characteristics) {
-
-            console.log(
-                "UUID:",
-                c.uuid
-            );
-
-            console.log(
-                "properties:",
-                c.properties
-            );
-
-            // ==============================
-            // write可能 characteristic
-            // ==============================
-            if (
-                c.properties.write ||
-                c.properties.writeWithoutResponse
-            ) {
-
-                characteristic = c;
-
-                console.log(
-                    "WRITE characteristic発見:",
-                    c.uuid
-                );
-
-                break;
-            }
-        }
-
-        // ==================================
-        // 見つからない
-        // ==================================
-        if (!characteristic) {
-
-            throw new Error(
-                "write characteristic無し"
-            );
-        }
+        console.log(
+            characteristic
+        );
 
         // ==================================
         // 接続成功
@@ -131,7 +99,7 @@ async function connectBluetooth() {
         );
 
         console.log(
-            "BLE connected"
+            "BLE接続成功"
         );
 
         // ==================================
@@ -143,7 +111,7 @@ async function connectBluetooth() {
         );
 
         // ==================================
-        // 初期速度送信
+        // 初期速度
         // ==================================
         setSpeed(currentSpeed);
 
@@ -170,7 +138,7 @@ function onDisconnected() {
     updateConnectionStatus(false);
 
     console.log(
-        "BLE disconnected"
+        "BLE切断"
     );
 
     showToast(
@@ -240,12 +208,13 @@ async function sendCommand(command) {
 
 // ==========================================
 // 速度変更
+// SPD:xx
 // ==========================================
 async function setSpeed(level) {
 
     currentSpeed = level;
 
-    // micro:bit側 MAX_SPEED対応
+    // micro:bit側 speed
     const speedMap = [
         15,
         25,
@@ -322,7 +291,7 @@ async function setDirection(direction) {
 }
 
 // ==========================================
-// 接続表示
+// 接続状態表示
 // ==========================================
 function updateConnectionStatus(
     isConnected
