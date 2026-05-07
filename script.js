@@ -1,6 +1,6 @@
 // ==========================================
 // micro:bit FPVカー PWA
-// Android Chrome + micro:bit 最終安定版
+// Android Chrome 安定版
 // script.js
 // ==========================================
 
@@ -17,7 +17,7 @@ let currentSpeed = 2;
 let videoStream = null;
 
 // ==========================================
-// micro:bit BLE UART UUID
+// micro:bit UART UUID
 // ==========================================
 const SERVICE_UUID =
     "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
@@ -32,28 +32,23 @@ async function connectBluetooth() {
 
     try {
 
+        console.log("device取得");
+
         // ==================================
-        // device取得
+        // Android Chrome 安定版
+        // filters を使わない
         // ==================================
         device =
             await navigator.bluetooth.requestDevice({
 
-                filters: [
-                    {
-                        services: [
-                            SERVICE_UUID
-                        ]
-                    }
-                ],
+                acceptAllDevices: true,
 
                 optionalServices: [
                     SERVICE_UUID
                 ]
             });
 
-        console.log(
-            "device取得"
-        );
+        console.log("GATT接続");
 
         // ==================================
         // GATT接続
@@ -61,21 +56,17 @@ async function connectBluetooth() {
         const server =
             await device.gatt.connect();
 
-        console.log(
-            "GATT接続"
-        );
+        console.log("service取得");
 
         // ==================================
-        // service取得
+        // UART Service取得
         // ==================================
         const service =
             await server.getPrimaryService(
                 SERVICE_UUID
             );
 
-        console.log(
-            "service取得"
-        );
+        console.log("RX characteristic取得");
 
         // ==================================
         // RX characteristic取得
@@ -85,14 +76,11 @@ async function connectBluetooth() {
                 RX_CHARACTERISTIC_UUID
             );
 
-        console.log(
-            "RX characteristic取得"
-        );
+        console.log(characteristic);
 
-        console.log(
-            characteristic
-        );
-
+        // ==================================
+        // property確認
+        // ==================================
         console.log(
             "properties:",
             characteristic.properties
@@ -105,13 +93,9 @@ async function connectBluetooth() {
 
         updateConnectionStatus(true);
 
-        console.log(
-            "BLE接続成功"
-        );
+        console.log("BLE接続成功");
 
-        showToast(
-            "Bluetooth接続成功"
-        );
+        showToast("Bluetooth接続成功");
 
         // ==================================
         // 切断監視
@@ -124,9 +108,7 @@ async function connectBluetooth() {
         // ==================================
         // 初期速度送信
         // ==================================
-        await setSpeed(
-            currentSpeed
-        );
+        await setSpeed(currentSpeed);
 
     } catch(error) {
 
@@ -150,13 +132,9 @@ function onDisconnected() {
 
     updateConnectionStatus(false);
 
-    console.log(
-        "BLE切断"
-    );
+    console.log("BLE切断");
 
-    showToast(
-        "切断されました"
-    );
+    showToast("切断されました");
 }
 
 function disconnectBluetooth() {
@@ -176,7 +154,6 @@ function disconnectBluetooth() {
 
 // ==========================================
 // UART送信
-// 改行付き（超重要）
 // ==========================================
 async function sendCommand(command) {
 
@@ -186,19 +163,20 @@ async function sendCommand(command) {
 
     try {
 
-        const encoder =
-            new TextEncoder();
-
         // ==================================
         // 改行付き
         // ==================================
+        const encoder =
+            new TextEncoder();
+
         const data =
             encoder.encode(
                 command + "\n"
             );
 
         // ==================================
-        // micro:bit UART 安定版
+        // writeWithoutResponse
+        // Android Chrome 安定版
         // ==================================
         await characteristic
             .writeValueWithoutResponse(
@@ -231,7 +209,6 @@ async function setSpeed(level) {
 
     currentSpeed = level;
 
-    // micro:bit側速度
     const speedMap = [
         15,
         25,
@@ -243,13 +220,15 @@ async function setSpeed(level) {
     const realSpeed =
         speedMap[level];
 
-    // SPD形式
     const command =
         `SPD:${realSpeed}`;
 
-    await sendCommand(
-        command
+    console.log(
+        "速度:",
+        realSpeed
     );
+
+    await sendCommand(command);
 
     // UI更新
     document.getElementById(
@@ -260,11 +239,6 @@ async function setSpeed(level) {
         "speedBar"
     ).style.width =
         `${(level / 4) * 100}%`;
-
-    console.log(
-        "速度:",
-        realSpeed
-    );
 }
 
 // ==========================================
@@ -305,6 +279,7 @@ async function setDirection(direction) {
 
         default:
             command = "S";
+            break;
     }
 
     console.log(
@@ -312,13 +287,11 @@ async function setDirection(direction) {
         command
     );
 
-    await sendCommand(
-        command
-    );
+    await sendCommand(command);
 }
 
 // ==========================================
-// 接続状態UI
+// 接続UI
 // ==========================================
 function updateConnectionStatus(
     isConnected
@@ -373,7 +346,7 @@ function updateConnectionStatus(
 }
 
 // ==========================================
-// カメラ起動
+// カメラ
 // ==========================================
 async function startCamera() {
 
