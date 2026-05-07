@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>micro:bit FPV Car Controller</title>
+    <title>micro:bit FPV Car Controller - 修正版</title>
     <style>
         * {
             user-select: none;
@@ -177,6 +177,14 @@
             font-size: 12px;
             margin-top: 24px;
         }
+        
+        .debug {
+            font-size: 10px;
+            color: #888;
+            text-align: center;
+            margin-top: 12px;
+            font-family: monospace;
+        }
     </style>
 </head>
 <body>
@@ -215,19 +223,19 @@
     <div class="info">
         ⚡ 押し続けると連続送信 | 停止ボタンで全停止
     </div>
+    <div class="debug" id="debugInfo"></div>
 </div>
 
 <script>
     // ===============================
-    // UUID（micro:bit UART）
+    // UUID（micro:bit UART - 正確な仕様）
     // ===============================
     const UART_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-    const RX_CHARACTERISTIC = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";  // write
-    // ===============================
-
+    const TX_CHARACTERISTIC = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";  // 書き込み用
+    
     let device = null;
     let server = null;
-    let characteristic = null;
+    let writeCharacteristic = null;
     let connected = false;
 
     // UI Elements
@@ -235,10 +243,22 @@
     const statusText = document.getElementById("statusText");
     const connectBtn = document.getElementById("connectBtn");
     const disconnectBtn = document.getElementById("disconnectBtn");
+    const debugInfo = document.getElementById("debugInfo");
 
-    // 送信キュー（安定化）
+    // 送信キュー
     let queue = [];
     let sending = false;
+
+    // デバッグ表示
+    function debugLog(msg) {
+        console.log(msg);
+        debugInfo.innerHTML = new Date().toLocaleTimeString() + " " + msg;
+        setTimeout(() => {
+            if (debugInfo.innerHTML.includes(msg)) {
+                // 保持する
+            }
+        }, 3000);
+    }
 
     // ===============================
     // UI更新
@@ -258,55 +278,85 @@
     }
 
     // ===============================
-    // 安定送信処理 (キュー + 遅延)
+    // 送信関数 - writeValue を使用（writeWithoutResponseは許可されない場合がある）
     // ===============================
+    async function writeToMicrobit(data) {
+        if (!writeCharacteristic || !connected) {
+            debugLog("❌ 書き込み不可: 未接続");
+            return false;
+        }
+        
+        try {
+            // 重要な修正: writeValue を使用（writeWithoutResponseはmicro:bitで許可されない）
+            await writeCharacteristic.writeValue(data);
+            debugLog("✅ 送信成功: " + new TextDecoder().decode(data).trim());
+            return true;
+        } catch (e) {
+            debugLog("❌ 送信エラー: " + e.message);
+            console.error("Write error:", e);
+            
+            // エラー内容が"GATT operation not permitted"の場合
+            if (e.message.includes("not permitted") || e.message.includes("GATT")) {
+                debugLog("⚠️ 権限エラー - 再接続が必要かもしれません");
+                // 接続状態をリセットしない（再接続はユーザー操作で）
+            }
+            return false;
+        }
+    }
+
+    // キュー処理
     async function processQueue() {
         if (sending) return;
         if (queue.length === 0) return;
-        if (!connected || !characteristic) {
-            // 未接続ならキューをクリア
+        if (!connected || !writeCharacteristic) {
             queue = [];
             return;
         }
 
         sending = true;
         const cmd = queue.shift();
-
+        
         try {
             const encoder = new TextEncoder();
             const data = encoder.encode(cmd);
-            await characteristic.writeValueWithoutResponse(data);  // writeWithoutResponse が安定
-            console.log("📤", cmd.trim());
-        } catch (e) {
-            console.warn("送信失敗:", e);
-            // エラー時は接続断とみなす
-            if (e.message && e.message.includes("GATT")) {
-                connected = false;
-                updateUI(false);
-                characteristic = null;
+            const success = await writeToMicrobit(data);
+            
+            if (!success && cmd !== "up") {
+                // エラー時は少し待ってからリトライしない（キューは処理済み）
+                debugLog("⚠️ 送信失敗: " + cmd.trim());
             }
+        } catch (e) {
+            debugLog("❌ キュー送信例外: " + e.message);
         }
 
         sending = false;
-        // 次の送信まで少し待つ (micro:bit処理が追いつく)
-        setTimeout(processQueue, 30);
+        // 次の送信まで待機（micro:bitの処理速度に合わせる）
+        setTimeout(processQueue, 50);
     }
 
     function sendCommand(cmd) {
-        if (!connected || !characteristic) return;
+        if (!connected || !writeCharacteristic) {
+            debugLog("📦 未接続: コマンド破棄 " + cmd);
+            return;
+        }
         queue.push(cmd + "\n");
+        debugLog("📝 キュー追加: " + cmd);
         processQueue();
     }
 
     // ===============================
-    // BLE接続 (完全再現＋遅延付き)
+    // BLE接続（正しい手順で）
     // ===============================
     async function connectBLE() {
-        if (connected) return;
+        if (connected) {
+            debugLog("既に接続済み");
+            return;
+        }
 
         try {
-            console.log("🔍 BLEデバイス検索開始...");
-            // フィルタ: micro:bit の名前パターンまたは全てのデバイス
+            debugLog("🔍 BLEデバイス検索中...");
+            
+            // micro:bitを確実に見つけるためのフィルター
             device = await navigator.bluetooth.requestDevice({
                 filters: [
                     { namePrefix: "micro:bit" },
@@ -315,102 +365,124 @@
                 optionalServices: [UART_SERVICE]
             });
 
-            console.log("✅ 選択:", device.name || device.id);
+            debugLog("✅ デバイス選択: " + (device.name || "Unknown"));
 
             // 切断イベント
             device.addEventListener("gattserverdisconnected", () => {
-                console.log("🔌 BLE切断 (サーバー)");
+                debugLog("🔌 切断イベント発生");
                 connected = false;
-                characteristic = null;
+                writeCharacteristic = null;
                 updateUI(false);
                 queue = [];
                 sending = false;
             });
 
             // GATT接続
+            debugLog("🔗 GATT接続中...");
             server = await device.gatt.connect();
-            console.log("🔗 GATT接続OK");
+            debugLog("✅ GATT接続完了");
 
             // サービス取得
+            debugLog("📡 サービス取得中...");
             const service = await server.getPrimaryService(UART_SERVICE);
-            console.log("📡 UARTサービス取得");
+            debugLog("✅ サービス取得成功");
 
-            // 書き込み characteristic (RX)
-            characteristic = await service.getCharacteristic(RX_CHARACTERISTIC);
-            console.log("✍️ 書き込みChar取得");
-
-            // 接続成功フラグ
+            // 書き込み用Characteristic取得
+            debugLog("✍️ Characteristic取得中...");
+            writeCharacteristic = await service.getCharacteristic(TX_CHARACTERISTIC);
+            debugLog("✅ 書き込みCharacteristic取得成功");
+            
+            // 特性を確認
+            const properties = writeCharacteristic.properties;
+            debugLog(`📊 Characteristic properties: write=${properties.write}, writeWithoutResponse=${properties.writeWithoutResponse}`);
+            
+            // 接続成功
             connected = true;
             updateUI(true);
-
-            // 少し待ってから初期化コマンドを送らない (micro:bit側が準備)
-            console.log("🎮 コントロール準備完了");
-
-            // 念のため停止コマンド
+            
+            // 少し待ってから停止コマンドを送信（micro:bit準備完了待ち）
             setTimeout(() => {
                 if (connected) {
+                    debugLog("🛑 初期停止コマンド送信");
                     sendCommand("up");
                     sendCommand("down");
                     sendCommand("left");
                     sendCommand("right");
                 }
-            }, 200);
+            }, 500);
+            
+            debugLog("🎉 接続完了！操作可能です");
 
         } catch (err) {
-            console.error("❌ BLE接続エラー:", err);
-            alert("接続失敗: " + (err.message || "Bluetooth対応端末か確認してね"));
+            debugLog("❌ 接続エラー: " + err.message);
+            console.error("BLE Error:", err);
+            alert("接続失敗: " + (err.message || "Bluetoothを確認してください"));
             connected = false;
+            writeCharacteristic = null;
             updateUI(false);
-            characteristic = null;
         }
     }
 
     // 切断処理
     function disconnectBLE() {
+        debugLog("切断処理実行");
         if (device && device.gatt.connected) {
             device.gatt.disconnect();
-        } else {
-            connected = false;
-            characteristic = null;
-            updateUI(false);
         }
+        connected = false;
+        writeCharacteristic = null;
+        updateUI(false);
+        queue = [];
+        sending = false;
+        debugLog("切断完了");
     }
 
     // ===============================
-    // 十字キーバインド (リピート送信)
+    // 十字キーバインド
     // ===============================
     function bindPad(dir, pressCmd, releaseCmd) {
         const btn = document.querySelector(`[data-dir="${dir}"]`);
         if (!btn) return;
 
         let repeatInterval = null;
+        let isPressed = false;
 
         function startSending() {
-            if (!connected) return;
-            // 最初の送信
+            if (!connected) {
+                debugLog("未接続のため操作できません");
+                return;
+            }
+            if (isPressed) return;
+            isPressed = true;
+            
+            debugLog(`▶️ ${pressCmd} 開始`);
             sendCommand(pressCmd);
-            // リピート (200ms 毎)
+            
             if (repeatInterval) clearInterval(repeatInterval);
             repeatInterval = setInterval(() => {
-                if (connected) {
+                if (connected && isPressed) {
                     sendCommand(pressCmd);
                 } else {
                     stopSending();
                 }
-            }, 200);
+            }, 180);
         }
 
         function stopSending() {
+            if (!isPressed) return;
+            isPressed = false;
+            
             if (repeatInterval) {
                 clearInterval(repeatInterval);
                 repeatInterval = null;
             }
+            
             if (connected) {
+                debugLog(`⏹️ ${releaseCmd} 停止`);
                 sendCommand(releaseCmd);
             }
         }
 
-        // マウス・タッチ両対応
         btn.addEventListener("mousedown", startSending);
         btn.addEventListener("mouseup", stopSending);
         btn.addEventListener("mouseleave", stopSending);
@@ -424,24 +496,25 @@
     }
 
     // ===============================
-    // Speed スライダー
+    // スピードコントロール
     // ===============================
     let speedDebounce = null;
     let lastSpeedCmd = "";
 
     function sendSpeed(value) {
         let level = parseInt(value, 10);
-        // micro:bit側の speed_table 仕様に変換
+        // micro:bit側の速度テーブルに合わせる
         let mapped = 0;
         if (level === 0) mapped = 0;
         else if (level === 1) mapped = 4;
         else if (level === 2) mapped = 8;
         else if (level === 3) mapped = 12;
         else if (level === 4) mapped = 15;
-
+        
         const cmd = "c" + String(mapped).padStart(2, "0");
         if (cmd === lastSpeedCmd) return;
         lastSpeedCmd = cmd;
+        debugLog(`⚡ 速度設定: ${level} → cmd=${cmd}`);
         sendCommand(cmd);
     }
 
@@ -454,20 +527,21 @@
         if (speedDebounce) clearTimeout(speedDebounce);
         speedDebounce = setTimeout(() => {
             sendSpeed(val);
-        }, 100);
+        }, 150);
     });
 
-    // STOP ボタン: 全停止を送信
+    // STOPボタン
     const stopBtn = document.querySelector('[data-dir="STOP"]');
     if (stopBtn) {
         stopBtn.addEventListener("click", () => {
             if (!connected) return;
+            debugLog("🛑 緊急停止");
             sendCommand("up");
             sendCommand("down");
             sendCommand("left");
             sendCommand("right");
         });
-        // タッチでもclickで動くように
+        
         stopBtn.addEventListener("touchstart", (e) => {
             e.preventDefault();
             if (!connected) return;
@@ -484,15 +558,19 @@
     bindPad("LEFT", "LEFT", "left");
     bindPad("RIGHT", "RIGHT", "right");
 
-    // 接続ボタンイベント
+    // イベント登録
     connectBtn.onclick = connectBLE;
     disconnectBtn.onclick = disconnectBLE;
 
     // 初期表示
     updateUI(false);
-
-    // コンソールログ確認用
-    console.log("PWA ready — 正しいCharacteristicで書き込み");
+    debugLog("PWA起動完了 - 接続ボタンを押してください");
+    
+    // デバイスの準備状況を確認
+    if (!navigator.bluetooth) {
+        debugLog("⚠️ このブラウザはWeb Bluetoothをサポートしていません");
+        alert("このブラウザはBluetoothに対応していません。ChromeまたはEdgeを使用してください。");
+    }
 </script>
 </body>
 </html>
