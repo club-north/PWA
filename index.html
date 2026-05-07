@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>micro:bit Car Controller</title>
+    <title>micro:bit FPV Car Controller</title>
     <style>
         * {
             user-select: none;
@@ -50,6 +50,7 @@
             border-radius: 50%;
             background: #ff3333;
             transition: all 0.2s;
+            box-shadow: 0 0 4px #ff3333;
         }
         .led.connected {
             background: #33ff33;
@@ -133,15 +134,6 @@
             font-size: 12px;
             margin-top: 24px;
         }
-        .warning {
-            background: #ff990033;
-            border-left: 3px solid #ff9900;
-            padding: 10px;
-            margin-bottom: 20px;
-            border-radius: 8px;
-            font-size: 12px;
-            color: #ffaa66;
-        }
         .debug {
             font-size: 10px;
             color: #888;
@@ -149,14 +141,14 @@
             margin-top: 12px;
             font-family: monospace;
             word-break: break-all;
+            background: #00000055;
+            padding: 8px;
+            border-radius: 8px;
         }
     </style>
 </head>
 <body>
 <div class="container">
-    <div class="warning" id="warningMsg">
-        ⚠️ ローカルサーバーで実行してください（file://では動作しません）
-    </div>
     <div class="status-bar">
         <div class="status-indicator">
             <div class="led" id="statusLed"></div>
@@ -196,49 +188,53 @@
     (function() {
         'use strict';
         
-        // プロトコルチェック
-        if (window.location.protocol === 'file:') {
-            const warningMsg = document.getElementById('warningMsg');
-            if (warningMsg) {
-                warningMsg.style.background = '#ff3333cc';
-                warningMsg.style.borderLeftColor = '#ff0000';
-                warningMsg.innerHTML = '❌ file://プロトコルでは動作しません！Pythonサーバーなどを使用してください：<br>python -m http.server 8080';
-            }
-            console.error('file://プロトコルではBLEは動作しません');
-        }
-        
+        // ==========================================
+        // micro:bit UART サービスUUID（完全一致）
+        // ==========================================
         const UART_SERVICE = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-        const TX_CHARACTERISTIC = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+        // ★ RX Characteristic（スマホ → micro:bit 書き込み用）
+        const RX_CHARACTERISTIC = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
         
         let device = null;
         let server = null;
         let writeCharacteristic = null;
         let connected = false;
         
+        // UI要素
         const statusLed = document.getElementById("statusLed");
         const statusText = document.getElementById("statusText");
         const connectBtn = document.getElementById("connectBtn");
         const disconnectBtn = document.getElementById("disconnectBtn");
         const debugInfo = document.getElementById("debugInfo");
         
+        // 送信キュー
         let queue = [];
         let sending = false;
         
-        function debugLog(msg) {
+        // デバッグ表示
+        function debugLog(msg, isError = false) {
             const timestamp = new Date().toLocaleTimeString();
             const logMsg = `[${timestamp}] ${msg}`;
             console.log(logMsg);
             if (debugInfo) {
                 debugInfo.innerHTML = logMsg;
+                debugInfo.style.color = isError ? '#ff8888' : '#88ff88';
+                setTimeout(() => {
+                    if (debugInfo.innerHTML === logMsg) {
+                        debugInfo.style.color = '#888888';
+                    }
+                }, 2000);
             }
         }
         
+        // UI更新
         function updateUI(state) {
             if (state) {
                 statusLed.classList.add("connected");
                 statusText.textContent = "接続中";
                 if (connectBtn) connectBtn.disabled = true;
                 if (disconnectBtn) disconnectBtn.disabled = false;
+                debugLog("✅ 接続完了 - 操作可能");
             } else {
                 statusLed.classList.remove("connected");
                 statusText.textContent = "未接続";
@@ -247,17 +243,23 @@
             }
         }
         
+        // micro:bitに書き込み
         async function writeToMicrobit(data) {
-            if (!writeCharacteristic || !connected) return false;
+            if (!writeCharacteristic || !connected) {
+                return false;
+            }
+            
             try {
+                // writeValueを使用（micro:bit UARTはこれを期待）
                 await writeCharacteristic.writeValue(data);
                 return true;
             } catch (e) {
-                debugLog(`❌ 送信エラー: ${e.message}`);
+                debugLog(`送信エラー: ${e.message}`, true);
                 return false;
             }
         }
         
+        // キュー処理
         async function processQueue() {
             if (sending) return;
             if (queue.length === 0) return;
@@ -265,41 +267,51 @@
                 queue = [];
                 return;
             }
+            
             sending = true;
             const cmd = queue.shift();
+            
             try {
                 const encoder = new TextEncoder();
                 const data = encoder.encode(cmd);
-                await writeToMicrobit(data);
-                debugLog(`📤 送信: ${cmd.trim()}`);
+                const success = await writeToMicrobit(data);
+                if (success) {
+                    debugLog(`📤 送信: ${cmd.trim()}`);
+                }
             } catch (e) {
-                debugLog(`❌ 失敗: ${e.message}`);
+                debugLog(`エラー: ${e.message}`, true);
             }
+            
             sending = false;
+            // micro:bitの処理速度に合わせて待機
             setTimeout(processQueue, 50);
         }
         
+        // コマンド送信（micro:bit側の仕様に完全準拠）
         function sendCommand(cmd) {
-            if (!connected || !writeCharacteristic) return;
+            if (!connected || !writeCharacteristic) {
+                debugLog(`⚠️ 未接続: ${cmd}`, true);
+                return;
+            }
+            // 改行を付加（micro:bitのuart_read_untilが改行を待つ）
             queue.push(cmd + "\n");
             processQueue();
         }
         
+        // ==========================================
+        // BLE接続
+        // ==========================================
         async function connectBLE() {
             if (connected) return;
             
-            if (window.location.protocol === 'file:') {
-                alert('file://プロトコルでは動作しません！\n\nPythonサーバーを起動してください：\npython -m http.server 8080\n\nその後 http://localhost:8080 にアクセス');
-                return;
-            }
-            
             if (!navigator.bluetooth) {
-                alert("このブラウザはWeb Bluetoothに対応していません。Chromeを使用してください。");
+                alert("このブラウザはWeb Bluetoothに対応していません。\nChromeまたはEdgeを使用してください。");
                 return;
             }
             
             try {
-                debugLog("🔍 デバイス検索中...");
+                debugLog("🔍 Bluetoothデバイス検索中...");
+                
                 device = await navigator.bluetooth.requestDevice({
                     filters: [
                         { namePrefix: "micro:bit" },
@@ -308,10 +320,11 @@
                     optionalServices: [UART_SERVICE]
                 });
                 
-                debugLog(`✅ 選択: ${device.name || "Unknown"}`);
+                debugLog(`✅ 選択: ${device.name || "micro:bit"}`);
                 
+                // 切断イベント
                 device.addEventListener("gattserverdisconnected", () => {
-                    debugLog("🔌 切断");
+                    debugLog("🔌 Bluetooth切断", true);
                     connected = false;
                     writeCharacteristic = null;
                     updateUI(false);
@@ -319,71 +332,112 @@
                     sending = false;
                 });
                 
+                // GATT接続
                 debugLog("🔗 GATT接続中...");
                 server = await device.gatt.connect();
                 debugLog("✅ GATT接続完了");
                 
-                debugLog("📡 サービス取得中...");
+                // サービス取得
+                debugLog("📡 UARTサービス取得中...");
                 const service = await server.getPrimaryService(UART_SERVICE);
-                debugLog("✅ サービス取得");
+                debugLog("✅ サービス取得完了");
                 
-                debugLog("✍️ Characteristic取得中...");
-                writeCharacteristic = await service.getCharacteristic(TX_CHARACTERISTIC);
-                debugLog("✅ Characteristic取得");
+                // ★ RX Characteristic取得（書き込み用）
+                debugLog("✍️ 書き込みCharacteristic(RX)取得中...");
+                writeCharacteristic = await service.getCharacteristic(RX_CHARACTERISTIC);
+                debugLog("✅ Characteristic取得完了");
+                
+                // プロパティ確認
+                const props = writeCharacteristic.properties;
+                debugLog(`📊 プロパティ: write=${props.write}`);
+                
+                if (!props.write) {
+                    debugLog("⚠️ writeプロパティがありません", true);
+                }
                 
                 connected = true;
                 updateUI(true);
                 
+                // 初期化：停止コマンドを送信
                 setTimeout(() => {
                     if (connected) {
+                        debugLog("🛑 初期化コマンド送信");
                         sendCommand("up");
                         sendCommand("down");
                         sendCommand("left");
                         sendCommand("right");
-                        debugLog("🎮 操作可能です！");
+                        // 速度設定も送信
+                        const speedSlider = document.getElementById("speedSlider");
+                        if (speedSlider) {
+                            const val = parseInt(speedSlider.value);
+                            const table = [0, 4, 8, 12, 15];
+                            const mapped = table[val];
+                            const speedCmd = "c" + String(mapped).padStart(2, "0");
+                            sendCommand(speedCmd);
+                        }
                     }
                 }, 500);
                 
             } catch (err) {
-                debugLog(`❌ エラー: ${err.message}`);
+                debugLog(`❌ 接続エラー: ${err.message}`, true);
+                console.error(err);
                 alert(`接続エラー: ${err.message}`);
                 connected = false;
+                writeCharacteristic = null;
                 updateUI(false);
             }
         }
         
+        // 切断
         function disconnectBLE() {
             if (device && device.gatt && device.gatt.connected) {
                 device.gatt.disconnect();
+                debugLog("切断リクエスト送信");
             }
             connected = false;
             writeCharacteristic = null;
             updateUI(false);
             queue = [];
-            debugLog("切断完了");
+            sending = false;
         }
         
+        // ==========================================
+        // ボタンバインド（micro:bitコマンド完全準拠）
+        // ==========================================
+        // 移動中は大文字コマンド、停止時は小文字コマンド
         function bindPad(dir, pressCmd, releaseCmd) {
             const btn = document.querySelector(`[data-dir="${dir}"]`);
             if (!btn) return;
+            
             let repeatInterval = null;
             let isPressed = false;
             
             function start() {
                 if (!connected || isPressed) return;
                 isPressed = true;
-                sendCommand(pressCmd);
+                debugLog(`▶️ ${pressCmd}`);
+                sendCommand(pressCmd);  // 大文字（移動開始）
+                
                 repeatInterval = setInterval(() => {
-                    if (connected && isPressed) sendCommand(pressCmd);
-                    else stop();
-                }, 200);
+                    if (connected && isPressed) {
+                        sendCommand(pressCmd);
+                    } else {
+                        stop();
+                    }
+                }, 150);
             }
             
             function stop() {
                 if (!isPressed) return;
                 isPressed = false;
-                if (repeatInterval) clearInterval(repeatInterval);
-                if (connected) sendCommand(releaseCmd);
+                if (repeatInterval) {
+                    clearInterval(repeatInterval);
+                    repeatInterval = null;
+                }
+                if (connected) {
+                    debugLog(`⏹️ ${releaseCmd}`);
+                    sendCommand(releaseCmd);  // 小文字（停止）
+                }
             }
             
             btn.addEventListener("mousedown", start);
@@ -391,52 +445,91 @@
             btn.addEventListener("mouseleave", stop);
             btn.addEventListener("touchstart", start, { passive: false });
             btn.addEventListener("touchend", stop);
+            btn.addEventListener("touchcancel", stop);
         }
         
+        // ==========================================
+        // スピードコントロール
+        // ==========================================
         let speedDebounce = null;
         let lastSpeedCmd = "";
         
         function sendSpeed(value) {
+            if (!connected) return;
+            
             const level = parseInt(value);
+            // micro:bitのspeed_tableに合わせたマッピング
+            // level 0→0, 1→4, 2→8, 3→12, 4→15
             const table = [0, 4, 8, 12, 15];
             const mapped = table[level] || 0;
             const cmd = "c" + String(mapped).padStart(2, "0");
+            
             if (cmd === lastSpeedCmd) return;
             lastSpeedCmd = cmd;
+            
+            debugLog(`⚡ 速度: level=${level} → ${cmd}`);
             sendCommand(cmd);
         }
         
+        // スライダー設定
         const speedSlider = document.getElementById("speedSlider");
         const speedValueSpan = document.getElementById("speedValue");
+        
         if (speedSlider) {
             speedSlider.addEventListener("input", (e) => {
-                if (speedValueSpan) speedValueSpan.textContent = e.target.value;
+                const val = e.target.value;
+                if (speedValueSpan) speedValueSpan.textContent = val;
                 if (speedDebounce) clearTimeout(speedDebounce);
-                speedDebounce = setTimeout(() => sendSpeed(e.target.value), 150);
+                speedDebounce = setTimeout(() => {
+                    sendSpeed(val);
+                }, 100);
             });
         }
         
+        // STOPボタン（小文字コマンドを全て送信）
         const stopBtn = document.querySelector('[data-dir="STOP"]');
         if (stopBtn) {
             stopBtn.addEventListener("click", () => {
                 if (!connected) return;
+                debugLog("🛑 緊急停止");
                 sendCommand("up");
                 sendCommand("down");
                 sendCommand("left");
                 sendCommand("right");
             });
+            stopBtn.addEventListener("touchstart", (e) => {
+                e.preventDefault();
+                if (!connected) return;
+                sendCommand("up");
+                sendCommand("down");
+                sendCommand("left");
+                sendCommand("right");
+            }, { passive: false });
         }
         
+        // ==========================================
+        // ボタンバインド登録
+        // 移動: 大文字コマンド / 停止: 小文字コマンド
+        // ==========================================
         bindPad("UP", "UP", "up");
         bindPad("DOWN", "DOWN", "down");
         bindPad("LEFT", "LEFT", "left");
         bindPad("RIGHT", "RIGHT", "right");
         
+        // イベント登録
         if (connectBtn) connectBtn.onclick = connectBLE;
         if (disconnectBtn) disconnectBtn.onclick = disconnectBLE;
         
+        // 初期状態
         updateUI(false);
-        debugLog("✅ 準備完了 - 接続ボタンを押してください");
+        debugLog("✅ PWA起動完了 - 接続ボタンを押してください");
+        debugLog("📋 micro:bit UARTサービス(RX)を使用します");
+        
+        // Bluetooth対応チェック
+        if (!navigator.bluetooth) {
+            debugLog("❌ Web Bluetooth未対応", true);
+            alert("このブラウザはWeb Bluetoothに対応していません。\nChromeまたはEdgeを使用してください。");
+        }
     })();
 </script>
 </body>
