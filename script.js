@@ -1,13 +1,12 @@
-// ============================================
-// micro:bit FPV Car Controller
-// LoFi Control互換
-// micro:bit UART完全対応版
-// ============================================
+// =====================================
+// micro:bit FPV Car PWA (FIXED)
+// micro:bitコード完全一致版
+// =====================================
 
 
-// ============================================
+// ===============================
 // BLE UUID
-// ============================================
+// ===============================
 
 const UART_SERVICE =
 "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
@@ -15,462 +14,262 @@ const UART_SERVICE =
 const UART_TX =
 "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
 
-
-// ============================================
-// BLE変数
-// ============================================
-
-let device = null;
-let server = null;
-let service = null;
-let txCharacteristic = null;
-
+let device;
+let server;
+let service;
+let tx;
 let connected = false;
 
 
-// ============================================
-// HTML要素
-// ============================================
+// ===============================
+// UI
+// ===============================
 
-const statusLed =
-document.getElementById("statusLed");
-
-const statusText =
-document.getElementById("statusText");
-
-const connectBtn =
-document.getElementById("connectBtn");
-
-const disconnectBtn =
-document.getElementById("disconnectBtn");
-
-const speedSlider =
-document.getElementById("speedSlider");
-
-const speedValue =
-document.getElementById("speedValue");
-
-const speedBar =
-document.getElementById("speedBar");
-
-const leftTrim =
-document.getElementById("leftTrim");
-
-const rightTrim =
-document.getElementById("rightTrim");
-
-const leftTrimVal =
-document.getElementById("leftTrimVal");
-
-const rightTrimVal =
-document.getElementById("rightTrimVal");
-
-const resetTrim =
-document.getElementById("resetTrim");
+const statusLed = document.getElementById("statusLed");
+const statusText = document.getElementById("statusText");
+const connectBtn = document.getElementById("connectBtn");
+const disconnectBtn = document.getElementById("disconnectBtn");
 
 
-// ============================================
-// 接続状態表示
-// ============================================
-
-function updateConnectionUI(state){
-
-    connected = state;
-
-    if(state){
-
-        statusLed.classList.add("connected");
-
-        statusText.textContent =
-        "接続済み";
-
-        connectBtn.disabled = true;
-
-        disconnectBtn.disabled = false;
-
-    }else{
-
-        statusLed.classList.remove("connected");
-
-        statusText.textContent =
-        "未接続";
-
-        connectBtn.disabled = false;
-
-        disconnectBtn.disabled = true;
-    }
-}
-
-
-// ============================================
-// BLE接続
-// ============================================
+// ===============================
+// CONNECT
+// ===============================
 
 async function connectBLE(){
 
     try{
 
-        device =
-        await navigator.bluetooth.requestDevice({
+        device = await navigator.bluetooth.requestDevice({
 
-            filters:[
-                {
-                    namePrefix:"BBC micro:bit"
-                }
-            ],
+            filters:[{
+                namePrefix:"BBC micro:bit"
+            }],
 
-            optionalServices:[
-                UART_SERVICE
-            ]
+            optionalServices:[UART_SERVICE]
         });
-
 
         device.addEventListener(
             "gattserverdisconnected",
             onDisconnected
         );
 
+        server = await device.gatt.connect();
 
-        server =
-        await device.gatt.connect();
+        service = await server.getPrimaryService(UART_SERVICE);
 
+        tx = await service.getCharacteristic(UART_TX);
 
-        service =
-        await server.getPrimaryService(
-            UART_SERVICE
-        );
+        connected = true;
 
+        updateUI(true);
 
-        txCharacteristic =
-        await service.getCharacteristic(
-            UART_TX
-        );
-
-
-        updateConnectionUI(true);
-
-        console.log("BLE Connected");
+        console.log("CONNECTED");
 
     }catch(e){
-
         console.log(e);
-
-        alert("Bluetooth接続失敗");
+        alert("接続失敗");
     }
 }
 
 
-// ============================================
-// 切断
-// ============================================
+// ===============================
+// DISCONNECT
+// ===============================
 
 function disconnectBLE(){
 
     if(device && device.gatt.connected){
-
         device.gatt.disconnect();
     }
 }
 
 
-// ============================================
-// 切断イベント
-// ============================================
+// ===============================
+// STATUS
+// ===============================
 
 function onDisconnected(){
 
-    updateConnectionUI(false);
+    connected = false;
 
-    console.log("BLE Disconnected");
+    updateUI(false);
+
+    console.log("DISCONNECTED");
+}
+
+function updateUI(state){
+
+    if(state){
+
+        statusLed.style.background = "lime";
+        statusText.textContent = "接続中";
+        connectBtn.disabled = true;
+        disconnectBtn.disabled = false;
+
+    }else{
+
+        statusLed.style.background = "red";
+        statusText.textContent = "未接続";
+        connectBtn.disabled = false;
+        disconnectBtn.disabled = true;
+    }
 }
 
 
-// ============================================
-// UART送信
-// micro:bit側は
-// uart_read_until(NEW_LINE)
-// を使用しているため
-// 改行必須
-// ============================================
+// ===============================
+// SEND（重要：改行禁止）
+// ===============================
 
-async function send(text){
+async function send(cmd){
 
-    if(!txCharacteristic)return;
+    if(!tx || !connected) return;
 
     try{
 
         const data =
-        new TextEncoder().encode(
-            text + "\n"
-        );
+        new TextEncoder().encode(cmd);
 
-        await txCharacteristic
-        .writeValueWithoutResponse(
-            data
-        );
+        await tx.writeValueWithoutResponse(data);
 
-        console.log("SEND:", text);
+        console.log("SEND:", cmd);
 
     }catch(e){
-
-        console.log(e);
+        console.log("SEND ERROR", e);
     }
 }
 
 
-// ============================================
-// 速度変換
-// HTML 0-4
-// micro:bit c00-c15
-// ============================================
+// ===============================
+// D-PAD（micro:bit完全一致）
+// ===============================
 
-function convertSpeed(level){
+function bindPad(dir, press, release){
 
-    if(level == 0)return 1;
-    if(level == 1)return 4;
-    if(level == 2)return 8;
-    if(level == 3)return 12;
-    if(level == 4)return 15;
+    const btn = document.querySelector(`[data-dir="${dir}"]`);
 
-    return 8;
-}
+    if(!btn) return;
 
+    let timer;
 
-// ============================================
-// スピードUI更新
-// ============================================
-
-function updateSpeedUI(level){
-
-    speedValue.textContent = level;
-
-    speedBar.style.width =
-    ((level / 4) * 100) + "%";
-}
-
-
-// ============================================
-// スピード送信
-// ============================================
-
-function sendSpeed(level){
-
-    const value =
-    convertSpeed(level);
-
-    const cmd =
-    "c" +
-    String(value).padStart(2,"0");
-
-    send(cmd);
-}
-
-
-// ============================================
-// スライダー
-// ============================================
-
-speedSlider.addEventListener(
-    "input",
-    e=>{
-
-        const level =
-        parseInt(e.target.value);
-
-        updateSpeedUI(level);
-
-        sendSpeed(level);
-    }
-);
-
-
-// ============================================
-// トリムUI
-// （micro:bitへは送らない）
-// ============================================
-
-leftTrim.addEventListener(
-    "input",
-    e=>{
-
-        leftTrimVal.textContent =
-        e.target.value;
-    }
-);
-
-rightTrim.addEventListener(
-    "input",
-    e=>{
-
-        rightTrimVal.textContent =
-        e.target.value;
-    }
-);
-
-
-// ============================================
-// トリムリセット
-// ============================================
-
-resetTrim.onclick = ()=>{
-
-    leftTrim.value = 8;
-    rightTrim.value = 0;
-
-    leftTrimVal.textContent = 8;
-    rightTrimVal.textContent = 0;
-};
-
-
-// ============================================
-// 十字キー制御
-// ============================================
-
-const releaseMap = {
-
-    "UP":"up",
-    "DOWN":"down",
-    "LEFT":"left",
-    "RIGHT":"right"
-};
-
-
-document
-.querySelectorAll(".dpad-btn")
-.forEach(btn=>{
-
-    const dir =
-    btn.dataset.dir;
-
-    let timer = null;
-
-
-    // =========================
-    // 押した時
-    // =========================
 
     const start = ()=>{
 
-        if(!connected)return;
+        if(!connected) return;
 
-
-        if(dir === "STOP"){
-
-            send("up");
-            send("down");
-            send("left");
-            send("right");
-
-            return;
-        }
-
-
-        send(dir);
-
+        send(press);
 
         timer = setInterval(()=>{
-
-            send(dir);
-
-        },120);
+            send(press);
+        }, 120);
     };
 
-
-    // =========================
-    // 離した時
-    // =========================
 
     const stop = ()=>{
 
         clearInterval(timer);
 
-
-        if(releaseMap[dir]){
-
-            send(releaseMap[dir]);
-        }
+        send(release);
     };
 
 
-    // =========================
-    // マウス
-    // =========================
+    btn.addEventListener("mousedown", start);
+    btn.addEventListener("mouseup", stop);
+    btn.addEventListener("mouseleave", stop);
 
-    btn.addEventListener(
-        "mousedown",
-        start
-    );
+    btn.addEventListener("touchstart", e=>{
+        e.preventDefault();
+        start();
+    }, {passive:false});
 
-    btn.addEventListener(
-        "mouseup",
-        stop
-    );
-
-    btn.addEventListener(
-        "mouseleave",
-        stop
-    );
+    btn.addEventListener("touchend", stop);
+}
 
 
-    // =========================
-    // タッチ
-    // =========================
+// ===============================
+// micro:bit コマンド完全一致
+// ===============================
 
-    btn.addEventListener(
-        "touchstart",
-        e=>{
+bindPad("UP", "UP", "up");
+bindPad("DOWN", "DOWN", "down");
+bindPad("LEFT", "LEFT", "left");
+bindPad("RIGHT", "RIGHT", "right");
 
-            e.preventDefault();
 
-            start();
-        },
-        {passive:false}
-    );
+// STOP（中央ボタン）
+document.querySelector('[data-dir="STOP"]')
+.addEventListener("click", ()=>{
 
-    btn.addEventListener(
-        "touchend",
-        stop
-    );
+    send("up");
+    send("down");
+    send("left");
+    send("right");
 });
 
 
-// ============================================
-// ボタン
-// ============================================
+// ===============================
+// SPEED（c00〜c15）
+// ===============================
 
-connectBtn.onclick =
-connectBLE;
+document
+.getElementById("speedSlider")
+.addEventListener("input", e=>{
 
-disconnectBtn.onclick =
-disconnectBLE;
+    const v = parseInt(e.target.value);
+
+    let mapped = 0;
+
+    if(v === 0) mapped = 0;
+    else if(v === 1) mapped = 4;
+    else if(v === 2) mapped = 8;
+    else if(v === 3) mapped = 12;
+    else mapped = 15;
+
+    const cmd = "c" + String(mapped).padStart(2,"0");
+
+    send(cmd);
+
+    document.getElementById("speedValue").textContent = v;
+});
 
 
-// ============================================
-// 初期UI
-// ============================================
+// ===============================
+// TRIM（UIのみ）
+// ===============================
 
-updateConnectionUI(false);
+document
+.getElementById("leftTrim")
+.addEventListener("input", e=>{
+    document.getElementById("leftTrimVal").textContent = e.target.value;
+});
 
-updateSpeedUI(2);
+document
+.getElementById("rightTrim")
+.addEventListener("input", e=>{
+    document.getElementById("rightTrimVal").textContent = e.target.value;
+});
+
+document
+.getElementById("resetTrim")
+.addEventListener("click", ()=>{
+
+    document.getElementById("leftTrim").value = 8;
+    document.getElementById("rightTrim").value = 0;
+
+    document.getElementById("leftTrimVal").textContent = 8;
+    document.getElementById("rightTrimVal").textContent = 0;
+});
 
 
-// ============================================
-// PWA Service Worker
-// ============================================
+// ===============================
+// BUTTONS
+// ===============================
 
-if("serviceWorker" in navigator){
+connectBtn.onclick = connectBLE;
+disconnectBtn.onclick = disconnectBLE;
 
-    navigator.serviceWorker
-    .register("./sw.js")
-    .then(()=>{
 
-        console.log(
-            "ServiceWorker Registered"
-        );
+// ===============================
+// INIT
+// ===============================
 
-    })
-    .catch(err=>{
-
-        console.log(err);
-    });
-}
+updateUI(false);
