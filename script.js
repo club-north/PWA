@@ -1,6 +1,7 @@
 // ==========================================
 // micro:bit FPVカー PWA
-// 完全修正版 script.js
+// Android Chrome + micro:bit 最終安定版
+// script.js
 // ==========================================
 
 // ==========================================
@@ -21,6 +22,9 @@ let videoStream = null;
 const SERVICE_UUID =
     "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
 
+const RX_CHARACTERISTIC_UUID =
+    "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+
 // ==========================================
 // Bluetooth接続
 // ==========================================
@@ -29,7 +33,7 @@ async function connectBluetooth() {
     try {
 
         // ==================================
-        // デバイス取得
+        // device取得
         // ==================================
         device =
             await navigator.bluetooth.requestDevice({
@@ -74,57 +78,25 @@ async function connectBluetooth() {
         );
 
         // ==================================
-        // characteristic一覧取得
+        // RX characteristic取得
         // ==================================
-        const characteristics =
-            await service.getCharacteristics();
+        characteristic =
+            await service.getCharacteristic(
+                RX_CHARACTERISTIC_UUID
+            );
 
         console.log(
-            "characteristics一覧:",
-            characteristics
+            "RX characteristic取得"
         );
 
-        // ==================================
-        // write可能 characteristic 探索
-        // ==================================
-        characteristic = null;
+        console.log(
+            characteristic
+        );
 
-        for (const c of characteristics) {
-
-            console.log(
-                "UUID:",
-                c.uuid
-            );
-
-            console.log(
-                "properties:",
-                c.properties
-            );
-
-            // write対応のみ採用
-            if (
-                c.properties.write
-            ) {
-
-                characteristic = c;
-
-                console.log(
-                    "WRITE characteristic発見"
-                );
-
-                break;
-            }
-        }
-
-        // ==================================
-        // 見つからない場合
-        // ==================================
-        if (!characteristic) {
-
-            throw new Error(
-                "write characteristicなし"
-            );
-        }
+        console.log(
+            "properties:",
+            characteristic.properties
+        );
 
         // ==================================
         // 接続成功
@@ -164,7 +136,7 @@ async function connectBluetooth() {
         );
 
         showToast(
-            "接続失敗"
+            "Bluetooth接続失敗"
         );
     }
 }
@@ -204,6 +176,7 @@ function disconnectBluetooth() {
 
 // ==========================================
 // UART送信
+// 改行付き（超重要）
 // ==========================================
 async function sendCommand(command) {
 
@@ -216,18 +189,21 @@ async function sendCommand(command) {
         const encoder =
             new TextEncoder();
 
-        // 改行超重要
+        // ==================================
+        // 改行付き
+        // ==================================
         const data =
             encoder.encode(
                 command + "\n"
             );
 
         // ==================================
-        // write送信
+        // micro:bit UART 安定版
         // ==================================
-        await characteristic.writeValue(
-            data
-        );
+        await characteristic
+            .writeValueWithoutResponse(
+                data
+            );
 
         console.log(
             "送信成功:",
