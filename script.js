@@ -164,7 +164,7 @@ async function sendCommand(command) {
         // micro:bit BLE UART 安定版
         // ==================================
         await characteristic
-            .writeValueWithoutResponse(
+            .writeValue(
                 data
             );
 
